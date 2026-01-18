@@ -21,7 +21,7 @@ function Login() {
       // redireciona para a home protegida
       window.location.href = '/';
     } catch (err) {
-       setError('Login inválido');
+      setError('Login inválido');
     }
   }
 
