@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: crypto_app
+    working_dir: /var/www
+    volumes:
+      - ./src:/var/www
+    ports:
+      - "8000:8000"
+    tty: true
+
+  db:
+    image: postgres:15
+    container_name: crypto_db
+    environment:
+      POSTGRES_DB: crypto_db
+      POSTGRES_USER: crypto_user
+      POSTGRES_PASSWORD: crypto_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+
