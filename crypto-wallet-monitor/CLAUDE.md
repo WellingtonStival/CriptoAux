@@ -26,7 +26,9 @@ tenha propósito didático (veja "Como colaborar" abaixo).
 Bearer token). Consulta blockchain via RPC (Ethereum, Solana) ou API REST
 de indexador (Bitcoin, via Blockstream).
 **Frontend**: React 19, Vite, React Router 7, Axios, Tailwind CSS.
-**Infra**: Docker Compose (3 serviços: `app`, `db`, `frontend`).
+**Infra**: Docker Compose (4 serviços: `app`, `scheduler`, `db`, `frontend`).
+`scheduler` roda `php artisan schedule:work` — necessário para os
+snapshots automáticos de histórico funcionarem (ver abaixo).
 
 ## Estrutura do repositório
 
@@ -36,21 +38,25 @@ crypto-wallet-monitor/
 ├── docker/php/Dockerfile
 ├── src/                 # Laravel (backend)
 │   ├── app/Http/Controllers/   AuthController, WalletController,
-│   │                             WalletBalanceController, PriceController
+│   │                             WalletBalanceController, WalletHistoryController,
+│   │                             PriceController
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
 │   ├── app/Services/Blockchain/ BlockchainServiceInterface, EthereumService,
 │   │                             SolanaService, BitcoinService, BlockchainResolver
 │   ├── app/Services/Market/     PriceService (cotações via CoinGecko)
+│   ├── app/Services/Wallet/     BalanceHistoryRecorder (salva snapshot)
+│   ├── app/Console/Commands/    CaptureWalletBalances (agendado de hora em hora)
 │   ├── tests/Feature/           AuthTest, WalletTest, WalletBalanceTest,
-│   │                             EthereumServiceTest, SolanaServiceTest,
-│   │                             BitcoinServiceTest, PriceServiceTest, PriceControllerTest
-│   └── routes/api.php
+│   │                             WalletHistoryControllerTest, EthereumServiceTest,
+│   │                             SolanaServiceTest, BitcoinServiceTest, PriceServiceTest,
+│   │                             PriceControllerTest, CaptureWalletBalancesCommandTest
+│   └── routes/api.php, routes/console.php (agendamento)
 └── frontend/             # React + Vite + Tailwind
     └── src/
         ├── context/AuthContext.jsx
         ├── components/  Layout, PrivateRoute, WalletForm, WalletList,
         │                 WalletItem, PricesPanel, PriceChangeBadge
-        ├── pages/       Login, Register, Wallets
+        ├── pages/       Login, Register, Wallets, WalletHistory
         └── services/    api.js (axios + interceptors)
 ```
 
@@ -73,7 +79,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (42 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (50 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -94,8 +100,18 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
     (`blockstream.info/api/address/{address}`), porque um nó Bitcoin não
     expõe "saldo de um endereço" sem indexar todos os UTXOs
   - Todos cacheiam por 60s
-- Tabela `wallet_balance_histories` existe (migration + model) mas
-  **nada a popula ainda** — é trabalho futuro (Fase 3 do roadmap)
+- **Histórico de saldo implementado**: a tabela `wallet_balance_histories`
+  agora tem coluna `price_usd` além de `balance`. `BalanceHistoryRecorder`
+  salva um snapshot (`App\Services\Wallet\BalanceHistoryRecorder::capture()`)
+  toda vez que `GET /api/wallets/{id}/balance` é chamado, **e** também
+  automaticamente de hora em hora via o comando agendado
+  `wallets:capture-balances` (registrado em `routes/console.php`,
+  precisa do serviço `scheduler` do docker-compose rodando). O comando
+  captura RPC/preço por wallet dentro de um try/catch — uma falha numa
+  wallet não impede as outras.
+  `GET /api/wallets/{id}/history?period=24h|7d|30d|all` retorna os pontos
+  do período + um resumo (`current_value_usd`, `change_value_usd`,
+  `change_percent`, `min_value_usd`, `max_value_usd`).
 - **Cotações**: `App\Services\Market\PriceService` consulta a API pública
   da CoinGecko (`/simple/price`) e retorna preço em USD + variação de 24h
   para cada rede suportada (reaproveita
@@ -118,6 +134,12 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   variação de 24h da moeda, assim que o saldo é consultado. Preços são
   buscados uma vez em `Wallets.jsx` e passados via props (evita chamadas
   duplicadas)
+- **Tela de histórico** (`/wallets/:id/history`, `WalletHistory.jsx`):
+  acessível pelo botão "Ver histórico" em cada `WalletItem`. Seletor de
+  período (24h/7d/30d/tudo), cards de indicadores (saldo atual, valor
+  atual, variação no período, mín/máx) e gráfico de linha (Recharts) do
+  valor em USD ao longo do tempo. Mostra mensagem de "dados insuficientes"
+  quando há menos de 2 pontos no período.
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -146,15 +168,18 @@ implementados e testados ponta a ponta contra as redes reais
 **Fase 1.6 — Cotações (valorização/desvalorização)** ✅ concluída: preço
 USD + variação 24h por moeda, painel geral + valor em USD por wallet
 
+**Fase 1.7 — Histórico de saldo/valorização por período** ✅ concluída:
+snapshot automático (agendado, de hora em hora) + manual (a cada consulta
+de saldo), tela separada com indicadores e gráfico por período
+
 **Decisão explícita do Wellington (2026-07-21)**: não seguir para infra de
 produção/deploy agora. Prioridade é **deixar o sistema "redondo"
 funcionalmente primeiro** — a Fase 2 (infra) abaixo foi empurrada pra
 depois da Fase 3.
 
 **Fase 2 — Completar funcionalidades** (atual)
-Ideias já levantadas: Kaspa (blockchain adicional) → job de histórico de
-saldo (popular `wallet_balance_histories`) → gráfico de evolução do saldo
-→ atualização automática de saldo/preço (sem precisar clicar) → alertas de
+Ideias já levantadas: Kaspa (blockchain adicional) → atualização
+automática de saldo/preço na tela sem precisar clicar → alertas de
 variação/movimentação → tela de exclusão de wallet na UI. Perguntar ao
 Wellington a prioridade dentro desta lista antes de escolher a próxima.
 
