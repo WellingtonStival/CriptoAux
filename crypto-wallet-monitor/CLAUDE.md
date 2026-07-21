@@ -35,17 +35,21 @@ crypto-wallet-monitor/
 ├── docker-compose.yml
 ├── docker/php/Dockerfile
 ├── src/                 # Laravel (backend)
-│   ├── app/Http/Controllers/   AuthController, WalletController, WalletBalanceController
+│   ├── app/Http/Controllers/   AuthController, WalletController,
+│   │                             WalletBalanceController, PriceController
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
 │   ├── app/Services/Blockchain/ BlockchainServiceInterface, EthereumService,
 │   │                             SolanaService, BitcoinService, BlockchainResolver
+│   ├── app/Services/Market/     PriceService (cotações via CoinGecko)
 │   ├── tests/Feature/           AuthTest, WalletTest, WalletBalanceTest,
-│   │                             EthereumServiceTest, SolanaServiceTest, BitcoinServiceTest
+│   │                             EthereumServiceTest, SolanaServiceTest,
+│   │                             BitcoinServiceTest, PriceServiceTest, PriceControllerTest
 │   └── routes/api.php
 └── frontend/             # React + Vite + Tailwind
     └── src/
         ├── context/AuthContext.jsx
-        ├── components/  Layout, PrivateRoute, WalletForm, WalletList, WalletItem
+        ├── components/  Layout, PrivateRoute, WalletForm, WalletList,
+        │                 WalletItem, PricesPanel, PriceChangeBadge
         ├── pages/       Login, Register, Wallets
         └── services/    api.js (axios + interceptors)
 ```
@@ -69,7 +73,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (37 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (42 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -92,6 +96,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   - Todos cacheiam por 60s
 - Tabela `wallet_balance_histories` existe (migration + model) mas
   **nada a popula ainda** — é trabalho futuro (Fase 3 do roadmap)
+- **Cotações**: `App\Services\Market\PriceService` consulta a API pública
+  da CoinGecko (`/simple/price`) e retorna preço em USD + variação de 24h
+  para cada rede suportada (reaproveita
+  `BlockchainResolver::supportedNetworks()` como IDs da CoinGecko — eles
+  coincidem hoje). Exposto em `GET /api/prices`, cacheado por 60s.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -103,6 +112,12 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 - `WalletForm` tem seletor de blockchain (Ethereum/Solana/Bitcoin), com
   placeholder e regex de validação client-side por rede, espelhando as
   regras do backend
+- `PricesPanel.jsx` — painel com preço USD + variação de 24h das 3 moedas
+  suportadas, sempre visível (independe de ter wallet cadastrada)
+- Cada `WalletItem` mostra o valor da wallet em USD (saldo × preço) e a
+  variação de 24h da moeda, assim que o saldo é consultado. Preços são
+  buscados uma vez em `Wallets.jsx` e passados via props (evita chamadas
+  duplicadas)
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -128,14 +143,25 @@ chave de RPC exposta, que é ação fora do código)
 **Fase 1.5 — Multi-blockchain** ✅ concluída: Ethereum, Solana, Bitcoin
 implementados e testados ponta a ponta contra as redes reais
 
-**Fase 2 — Infra de produção** (próxima)
+**Fase 1.6 — Cotações (valorização/desvalorização)** ✅ concluída: preço
+USD + variação 24h por moeda, painel geral + valor em USD por wallet
+
+**Decisão explícita do Wellington (2026-07-21)**: não seguir para infra de
+produção/deploy agora. Prioridade é **deixar o sistema "redondo"
+funcionalmente primeiro** — a Fase 2 (infra) abaixo foi empurrada pra
+depois da Fase 3.
+
+**Fase 2 — Completar funcionalidades** (atual)
+Ideias já levantadas: Kaspa (blockchain adicional) → job de histórico de
+saldo (popular `wallet_balance_histories`) → gráfico de evolução do saldo
+→ atualização automática de saldo/preço (sem precisar clicar) → alertas de
+variação/movimentação → tela de exclusão de wallet na UI. Perguntar ao
+Wellington a prioridade dentro desta lista antes de escolher a próxima.
+
+**Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)
 → HTTPS → segredos fora do repo → CI/CD → backups do Postgres → escolher
 hospedagem
-
-**Fase 3 — Completar o produto**
-Kaspa (blockchain adicional) → job de histórico de saldo → atualização
-automática → alertas
 
 **Fase 4 — Lançamento**
 domínio, monitoramento de erro (ex: Sentry), teste com usuários reais
