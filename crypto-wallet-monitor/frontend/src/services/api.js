@@ -53,4 +53,8 @@ export function getWalletBalance(walletId) {
   return api.get(`/wallets/${walletId}/balance`);
 }
 
+export function getPrices() {
+  return api.get('/prices');
+}
+
 export default api;

@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { getWalletBalance } from "../services/api";
 import { NETWORKS } from "../config/networks";
+import PriceChangeBadge from "./PriceChangeBadge";
 
-function WalletItem({ wallet }) {
+function WalletItem({ wallet, prices }) {
   const networkConfig = NETWORKS[wallet.network] ?? {
     label: wallet.network,
     symbol: "",
@@ -41,6 +42,9 @@ function WalletItem({ wallet }) {
     }
   }
 
+  const price = prices?.[wallet.network];
+  const valueUsd = balance !== null && price ? balance * price.usd : null;
+
   return (
     <li className="rounded-lg border border-slate-800 bg-slate-950 p-4">
       <div className="mb-2 break-all font-medium text-slate-50">
@@ -57,8 +61,19 @@ function WalletItem({ wallet }) {
       </div>
 
       {balance !== null && (
-        <div className="mb-3 text-slate-200">
+        <div className="mb-1 text-slate-200">
           Saldo: <strong>{balance}</strong> {networkConfig.symbol}
+        </div>
+      )}
+
+      {valueUsd !== null && (
+        <div className="mb-3 flex items-center gap-2 text-sm text-slate-400">
+          <span>
+            ≈ $
+            {valueUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+            USD
+          </span>
+          <PriceChangeBadge change={price.change_24h} />
         </div>
       )}
 

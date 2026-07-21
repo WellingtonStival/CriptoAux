@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import WalletForm from "../components/WalletForm";
 import WalletList from "../components/WalletList";
+import PricesPanel from "../components/PricesPanel";
 import Layout from "../components/Layout";
-import { getWallets } from "../services/api";
+import { getWallets, getPrices } from "../services/api";
 
 function Wallets() {
   const [wallets, setWallets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [prices, setPrices] = useState(null);
 
   useEffect(() => {
     async function loadWallets() {
@@ -22,7 +24,17 @@ function Wallets() {
       }
     }
 
+    async function loadPrices() {
+      try {
+        const response = await getPrices();
+        setPrices(response.data);
+      } catch {
+        // cotações são um extra: se falhar, a tela continua funcional sem elas
+      }
+    }
+
     loadWallets();
+    loadPrices();
   }, []);
 
   function handleWalletCreated(wallet) {
@@ -35,6 +47,8 @@ function Wallets() {
         Minhas Wallets
       </h1>
 
+      <PricesPanel prices={prices} />
+
       <WalletForm onCreated={handleWalletCreated} />
 
       {loading && <p className="text-slate-400">Carregando carteiras...</p>}
@@ -46,7 +60,7 @@ function Wallets() {
       )}
 
       {!loading && !error && wallets.length > 0 && (
-        <WalletList wallets={wallets} />
+        <WalletList wallets={wallets} prices={prices} />
       )}
     </Layout>
   );
