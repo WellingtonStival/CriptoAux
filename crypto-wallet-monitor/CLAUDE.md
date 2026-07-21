@@ -79,7 +79,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (50 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (52 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -112,6 +112,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   `GET /api/wallets/{id}/history?period=24h|7d|30d|all` retorna os pontos
   do período + um resumo (`current_value_usd`, `change_value_usd`,
   `change_percent`, `min_value_usd`, `max_value_usd`).
+  **Debounce**: `BalanceHistoryRecorder` só grava um snapshot novo se o
+  último da wallet tiver mais de 5 minutos — necessário porque o frontend
+  agora atualiza o saldo sozinho a cada ~60s (ver abaixo), e sem esse
+  limite cada wallet geraria um ponto de histórico por minuto só de
+  alguém deixar a aba aberta.
 - **Cotações**: `App\Services\Market\PriceService` consulta a API pública
   da CoinGecko (`/simple/price`) e retorna preço em USD + variação de 24h
   para cada rede suportada (reaproveita
@@ -134,6 +139,16 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   variação de 24h da moeda, assim que o saldo é consultado. Preços são
   buscados uma vez em `Wallets.jsx` e passados via props (evita chamadas
   duplicadas)
+- **Auto-atualização**: saldo de cada wallet carrega sozinho ao abrir a
+  tela (sem precisar clicar) e continua se atualizando a cada 60s
+  (`setInterval` com cleanup no `useEffect` de `WalletItem`). O painel de
+  cotações (`PricesPanel`) também se atualiza sozinho a cada 60s a partir
+  de `Wallets.jsx`. O botão "Atualizar saldo" continua existindo para
+  forçar uma atualização imediata.
+- **Excluir wallet**: botão "Remover" em cada `WalletItem`, com
+  confirmação **inline** no próprio card (não usa `window.confirm()` —
+  esse diálogo nativo trava a aba e é inconsistente com o tema escuro;
+  também trava ferramentas de automação de browser).
 - **Tela de histórico** (`/wallets/:id/history`, `WalletHistory.jsx`):
   acessível pelo botão "Ver histórico" em cada `WalletItem`. Seletor de
   período (24h/7d/30d/tudo), cards de indicadores (saldo atual, valor
@@ -177,11 +192,14 @@ produção/deploy agora. Prioridade é **deixar o sistema "redondo"
 funcionalmente primeiro** — a Fase 2 (infra) abaixo foi empurrada pra
 depois da Fase 3.
 
+**Fase 1.8 — Auto-atualização + excluir wallet pela UI** ✅ concluída:
+saldo/preço atualizam sozinhos (60s), botão de remover com confirmação
+inline
+
 **Fase 2 — Completar funcionalidades** (atual)
-Ideias já levantadas: Kaspa (blockchain adicional) → atualização
-automática de saldo/preço na tela sem precisar clicar → alertas de
-variação/movimentação → tela de exclusão de wallet na UI. Perguntar ao
-Wellington a prioridade dentro desta lista antes de escolher a próxima.
+Ideias já levantadas: Kaspa (blockchain adicional) → alertas de
+variação/movimentação. Perguntar ao Wellington a prioridade dentro desta
+lista antes de escolher a próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)
