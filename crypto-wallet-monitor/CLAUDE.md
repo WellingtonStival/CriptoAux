@@ -23,8 +23,9 @@ tenha propósito didático (veja "Como colaborar" abaixo).
 ## Stack
 
 **Backend**: Laravel 12, PHP 8.4, PostgreSQL, Laravel Sanctum (auth via
-Bearer token), JSON-RPC Ethereum.
-**Frontend**: React 19, Vite, React Router 7, Axios.
+Bearer token). Consulta blockchain via RPC (Ethereum, Solana) ou API REST
+de indexador (Bitcoin, via Blockstream).
+**Frontend**: React 19, Vite, React Router 7, Axios, Tailwind CSS.
 **Infra**: Docker Compose (3 serviços: `app`, `db`, `frontend`).
 
 ## Estrutura do repositório
@@ -36,13 +37,16 @@ crypto-wallet-monitor/
 ├── src/                 # Laravel (backend)
 │   ├── app/Http/Controllers/   AuthController, WalletController, WalletBalanceController
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
-│   ├── app/Services/Blockchain/ BlockchainServiceInterface, EthereumService, BlockchainResolver
+│   ├── app/Services/Blockchain/ BlockchainServiceInterface, EthereumService,
+│   │                             SolanaService, BitcoinService, BlockchainResolver
+│   ├── tests/Feature/           AuthTest, WalletTest, WalletBalanceTest,
+│   │                             EthereumServiceTest, SolanaServiceTest, BitcoinServiceTest
 │   └── routes/api.php
-└── frontend/             # React + Vite
+└── frontend/             # React + Vite + Tailwind
     └── src/
         ├── context/AuthContext.jsx
-        ├── components/  PrivateRoute, WalletForm, WalletList, WalletItem
-        ├── pages/       Login, Wallets
+        ├── components/  Layout, PrivateRoute, WalletForm, WalletList, WalletItem
+        ├── pages/       Login, Register, Wallets
         └── services/    api.js (axios + interceptors)
 ```
 
@@ -65,58 +69,73 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta
-- `POST /api/register`, `POST /api/login` (Sanctum, token Bearer)
+### Backend — funcional e testado ponta a ponta (37 testes, `php artisan test`)
+- `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
+  `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
+  token Bearer)
 - Rotas protegidas: `GET/POST /api/wallets`, `DELETE /api/wallets/{id}`,
   `GET /api/wallets/{id}/balance`
-- `WalletController` valida endereço Ethereum via regex e restringe
-  `network` a `ethereum` (único valor suportado hoje)
-- `EthereumService` consulta RPC (`eth_getBalance`), converte Wei→ETH com
-  GMP/BCMath (alta precisão), cacheia por 60s
-- `WalletBalanceController` usa `BlockchainResolver` (não instancia
-  `EthereumService` direto) — é assim que se adiciona uma nova blockchain
-  sem alterar o controller: implementar `BlockchainServiceInterface` e
-  registrar no `match()` do `BlockchainResolver`
+- **Multi-blockchain implementado**: Ethereum, Solana e Bitcoin, cada um
+  com sua classe em `app/Services/Blockchain/` implementando
+  `BlockchainServiceInterface` (`getBalance()`, `symbol()`,
+  `addressPattern()`). `BlockchainResolver::resolve($network)` decide qual
+  usar; `BlockchainResolver::supportedNetworks()` é a lista de redes
+  aceitas. `WalletController` valida o endereço dinamicamente via
+  `addressPattern()` da rede escolhida — **adicionar uma blockchain nova
+  não exige mais alterar o `WalletController`**, só criar o Service e
+  registrar no `BlockchainResolver`.
+  - `EthereumService`: RPC (`eth_getBalance`), Wei→ETH via GMP/BCMath
+  - `SolanaService`: RPC (`getBalance`), lamports→SOL via BCMath
+  - `BitcoinService`: **não usa RPC** — usa a API REST do Blockstream
+    (`blockstream.info/api/address/{address}`), porque um nó Bitcoin não
+    expõe "saldo de um endereço" sem indexar todos os UTXOs
+  - Todos cacheiam por 60s
 - Tabela `wallet_balance_histories` existe (migration + model) mas
   **nada a popula ainda** — é trabalho futuro (Fase 3 do roadmap)
 
 ### Frontend — funcional e testado no navegador
-- Login usa `AuthContext.login()` + `useNavigate()` (SPA, sem reload)
-- Logout implementado (botão "Sair" em `Wallets.jsx`)
+- Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
+  usam classes utilitárias, não inline styles
+- `Layout.jsx` — cabeçalho + logout, envolve as páginas autenticadas
+- Login e Register usam `AuthContext.login()` + `useNavigate()` (SPA, sem
+  reload); logout funcional
 - Interceptor de 401 ativo — sessão expirada desloga automaticamente
-- `WalletForm` cadastra carteira com validação client-side + tratamento de
-  erro de validação do backend
-- **Não existe tela de registro** — só login. Criar conta hoje exige
-  chamar `POST /api/register` diretamente.
+- `WalletForm` tem seletor de blockchain (Ethereum/Solana/Bitcoin), com
+  placeholder e regex de validação client-side por rede, espelhando as
+  regras do backend
 
 ### Débitos técnicos conhecidos
-- `src/app/Services/Blockchain/BlockchainFactory.php` é código morto,
-  duplica `BlockchainResolver` (que é o realmente usado). Pode ser
-  removido.
-- `frontend/src/config/networks.js` lista `bitcoin` e `solana`, mas o
-  backend só aceita `ethereum` — a UI promete o que a API rejeita.
-- Sem testes automatizados reais (só o `ExampleTest` padrão do Laravel).
+- `frontend/src/config/networks.js` define cor/label de badge para
+  `ethereum`, `bitcoin`, `solana` — todos já suportados pelo backend hoje.
+  Ao adicionar uma rede nova (ex: Kaspa), é preciso atualizar esse arquivo
+  **e** `WalletForm.jsx` (`ADDRESS_PATTERNS`/`NETWORK_OPTIONS`) além do
+  backend.
 - Setup Docker é só para desenvolvimento: backend roda `php artisan serve`
   (não é servidor de produção) e frontend roda `vite dev` (não é build
   estático). Precisa de imagem de produção antes do deploy (Fase 2).
 - A chave de RPC paga (Ankr) que estava no `.env` local foi exposta em uma
   conversa — **rotacionar antes de ir para produção**. `.env` não está no
   git (só `.env.example`), então não há vazamento no repositório.
+- `AuthContext.jsx` tem um aviso de lint (`react-refresh/only-export-components`)
+  por exportar hook + componente no mesmo arquivo — pré-existente, não
+  bloqueia nada, mas pode ser resolvido separando o hook em outro arquivo.
 
 ## Roadmap (por fases, prioridade nessa ordem)
 
-**Fase 1 — Endurecer o que existe**
-tela de registro → política de senha → testes automatizados dos
-controllers/services → rotacionar chave de RPC exposta
+**Fase 1 — Endurecer o que existe** ✅ concluída (falta só rotacionar a
+chave de RPC exposta, que é ação fora do código)
 
-**Fase 2 — Infra de produção**
+**Fase 1.5 — Multi-blockchain** ✅ concluída: Ethereum, Solana, Bitcoin
+implementados e testados ponta a ponta contra as redes reais
+
+**Fase 2 — Infra de produção** (próxima)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)
 → HTTPS → segredos fora do repo → CI/CD → backups do Postgres → escolher
 hospedagem
 
 **Fase 3 — Completar o produto**
-multi-blockchain (Bitcoin/Solana/Kaspa, via `BlockchainServiceInterface`)
-→ job de histórico de saldo → atualização automática → alertas
+Kaspa (blockchain adicional) → job de histórico de saldo → atualização
+automática → alertas
 
 **Fase 4 — Lançamento**
 domínio, monitoramento de erro (ex: Sentry), teste com usuários reais
