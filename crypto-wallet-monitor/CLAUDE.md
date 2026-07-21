@@ -136,3 +136,11 @@ domínio, monitoramento de erro (ex: Sentry), teste com usuários reais
 - Prefira sessões focadas em um item do roadmap por vez, em vez de
   revisões amplas do zero — mantenha este arquivo atualizado para que isso
   seja possível.
+- **Não faça varredura completa do código por padrão.** Antes de reler o
+  projeto inteiro, verifique se este arquivo já responde a pergunta; se
+  sim, prefira `git status`/`git diff` e leitura pontual dos arquivos
+  relevantes à tarefa. Reserve revisão completa para quando for pedida
+  explicitamente ou quando este arquivo estiver claramente desatualizado.
+- **Sempre peça permissão antes de `git commit`/`git push`**, mesmo que
+  uma ação anterior tenha sido aprovada na mesma sessão — cada commit/push
+  precisa do próprio aval.
