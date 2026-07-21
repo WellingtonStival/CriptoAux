@@ -61,4 +61,8 @@ export function getWalletHistory(walletId, period) {
   return api.get(`/wallets/${walletId}/history`, { params: { period } });
 }
 
+export function deleteWallet(walletId) {
+  return api.delete(`/wallets/${walletId}`);
+}
+
 export default api;

@@ -5,6 +5,8 @@ import PricesPanel from "../components/PricesPanel";
 import Layout from "../components/Layout";
 import { getWallets, getPrices } from "../services/api";
 
+const PRICES_REFRESH_INTERVAL_MS = 60_000;
+
 function Wallets() {
   const [wallets, setWallets] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,10 +37,19 @@ function Wallets() {
 
     loadWallets();
     loadPrices();
+
+    const interval = setInterval(loadPrices, PRICES_REFRESH_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   function handleWalletCreated(wallet) {
     setWallets((currentWallets) => [wallet, ...currentWallets]);
+  }
+
+  function handleWalletDeleted(walletId) {
+    setWallets((currentWallets) =>
+      currentWallets.filter((wallet) => wallet.id !== walletId)
+    );
   }
 
   return (
@@ -60,7 +71,11 @@ function Wallets() {
       )}
 
       {!loading && !error && wallets.length > 0 && (
-        <WalletList wallets={wallets} prices={prices} />
+        <WalletList
+          wallets={wallets}
+          prices={prices}
+          onDeleted={handleWalletDeleted}
+        />
       )}
     </Layout>
   );
