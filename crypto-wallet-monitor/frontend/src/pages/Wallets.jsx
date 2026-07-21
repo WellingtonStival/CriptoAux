@@ -1,21 +1,13 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import WalletForm from "../components/WalletForm";
 import WalletList from "../components/WalletList";
+import Layout from "../components/Layout";
 import { getWallets } from "../services/api";
-import { useAuth } from "../context/AuthContext";
 
 function Wallets() {
   const [wallets, setWallets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const { logout } = useAuth();
-  const navigate = useNavigate();
-
-  function handleLogout() {
-    logout();
-    navigate("/login");
-  }
 
   useEffect(() => {
     async function loadWallets() {
@@ -38,26 +30,25 @@ function Wallets() {
   }
 
   return (
-    <div style={{ padding: 20 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Minhas Wallets</h1>
-        <button onClick={handleLogout}>Sair</button>
-      </div>
+    <Layout>
+      <h1 className="mb-6 text-2xl font-bold text-slate-50">
+        Minhas Wallets
+      </h1>
 
       <WalletForm onCreated={handleWalletCreated} />
 
-      {loading && <p>Carregando carteiras...</p>}
+      {loading && <p className="text-slate-400">Carregando carteiras...</p>}
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+      {error && <p className="text-red-400">{error}</p>}
 
       {!loading && !error && wallets.length === 0 && (
-        <p>Nenhuma carteira cadastrada.</p>
+        <p className="text-slate-400">Nenhuma carteira cadastrada.</p>
       )}
 
       {!loading && !error && wallets.length > 0 && (
         <WalletList wallets={wallets} />
       )}
-    </div>
+    </Layout>
   );
 }
 

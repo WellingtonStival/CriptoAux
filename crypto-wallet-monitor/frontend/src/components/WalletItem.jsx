@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getWalletBalance } from "../services/walletService";
+import { getWalletBalance } from "../services/api";
 import { NETWORKS } from "../config/networks";
 
 function WalletItem({ wallet }) {
@@ -34,7 +34,7 @@ function WalletItem({ wallet }) {
         `wallet_balance_${wallet.id}`,
         JSON.stringify(value)
       );
-    } catch (err) {
+    } catch {
       setError("Erro ao buscar saldo");
     } finally {
       setLoading(false);
@@ -42,43 +42,33 @@ function WalletItem({ wallet }) {
   }
 
   return (
-    <li
-      style={{
-        marginBottom: 16,
-        padding: 12,
-        border: "1px solid #333",
-        borderRadius: 8,
-      }}
-    >
-      <div style={{ marginBottom: 6 }}>
-        <strong>{wallet.address}</strong>
+    <li className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+      <div className="mb-2 break-all font-medium text-slate-50">
+        {wallet.address}
       </div>
 
-      <div style={{ marginBottom: 8 }}>
+      <div className="mb-3">
         <span
-          style={{
-            background: networkConfig.color,
-            color: "#fff",
-            padding: "2px 8px",
-            borderRadius: 12,
-            fontSize: 12,
-          }}
+          className="rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
+          style={{ backgroundColor: networkConfig.color }}
         >
           {networkConfig.label}
         </span>
       </div>
 
       {balance !== null && (
-        <div style={{ marginBottom: 6 }}>
+        <div className="mb-3 text-slate-200">
           Saldo: <strong>{balance}</strong> {networkConfig.symbol}
         </div>
       )}
 
-      {error && (
-        <div style={{ color: "red", marginBottom: 6 }}>{error}</div>
-      )}
+      {error && <div className="mb-3 text-sm text-red-400">{error}</div>}
 
-      <button onClick={handleLoadBalance} disabled={loading}>
+      <button
+        onClick={handleLoadBalance}
+        disabled={loading}
+        className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+      >
         {loading
           ? "Consultando..."
           : balance === null
