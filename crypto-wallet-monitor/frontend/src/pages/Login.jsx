@@ -1,10 +1,14 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -16,10 +20,10 @@ function Login() {
         password,
       });
 
-      localStorage.setItem('token', response.data.token);
+      login(response.data.token);
 
-      // redireciona para a home protegida
-      window.location.href = '/';
+      // navega para a home protegida sem recarregar a página
+      navigate('/');
     } catch (err) {
       setError('Login inválido');
     }

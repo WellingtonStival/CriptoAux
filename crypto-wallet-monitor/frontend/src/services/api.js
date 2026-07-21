@@ -17,7 +17,7 @@ api.interceptors.request.use(config => {
   return config;
 });
 // ⬇️ Response → trata erro 401
-/*api.interceptors.response.use(
+api.interceptors.response.use(
   response => response,
   error => {
     if (
@@ -35,7 +35,7 @@ api.interceptors.request.use(config => {
 
     return Promise.reject(error);
   }
-);*/
+);
 
 /* =========================
    WALLET
@@ -45,8 +45,8 @@ export function getWallets() {
   return api.get('/wallets');
 }
 
-export function createWallet(address) {
-  return api.post('/wallets', { address });
+export function createWallet(address, network) {
+  return api.post('/wallets', { address, network });
 }
 
 export function getWalletBalance(walletId) {
