@@ -89,6 +89,28 @@ class WalletBalanceTest extends TestCase
         $this->assertEqualsWithDelta(2.0, $response->json('balance'), 0.00000001);
     }
 
+    public function test_checking_balance_records_a_history_snapshot(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'result' => '0xde0b6b3a7640000', // 1 ETH em wei
+            ]),
+        ]);
+
+        $user = User::factory()->create();
+        $wallet = Wallet::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->getJson("/api/wallets/{$wallet->id}/balance");
+
+        $this->assertDatabaseHas('wallet_balance_histories', [
+            'wallet_id' => $wallet->id,
+            'network' => $wallet->network,
+        ]);
+    }
+
     public function test_returns_502_when_the_rpc_request_fails(): void
     {
         Http::fake([

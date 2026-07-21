@@ -10,7 +10,14 @@ class WalletBalanceHistory extends Model
         'wallet_id',
         'network',
         'balance',
+        'price_usd',
         'captured_at',
+    ];
+
+    protected $casts = [
+        'captured_at' => 'datetime',
+        'balance' => 'float',
+        'price_usd' => 'float',
     ];
 
     public $timestamps = true;
