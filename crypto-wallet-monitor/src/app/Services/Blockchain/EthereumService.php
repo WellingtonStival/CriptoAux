@@ -58,4 +58,9 @@ class EthereumService implements BlockchainServiceInterface
     {
         return 'ETH';
     }
+
+    public function addressPattern(): string
+    {
+        return '/^0x[a-fA-F0-9]{40}$/';
+    }
 }

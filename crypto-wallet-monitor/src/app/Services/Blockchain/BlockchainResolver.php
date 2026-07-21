@@ -10,7 +10,17 @@ class BlockchainResolver
     {
         return match ($network) {
             'ethereum' => app(EthereumService::class),
+            'solana' => app(SolanaService::class),
+            'bitcoin' => app(BitcoinService::class),
             default => throw new \Exception("Blockchain não suportada"),
         };
+    }
+
+    /**
+     * Redes aceitas hoje pelo sistema. Usado pela validacao de wallets.
+     */
+    public static function supportedNetworks(): array
+    {
+        return ['ethereum', 'solana', 'bitcoin'];
     }
 }

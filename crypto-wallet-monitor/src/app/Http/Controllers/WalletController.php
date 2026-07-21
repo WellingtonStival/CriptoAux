@@ -5,21 +5,34 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Wallet;
 use Illuminate\Validation\Rule;
+use App\Services\Blockchain\BlockchainResolver;
 
 class WalletController extends Controller
 {
-    public function store(Request $request)
+    public function store(Request $request, BlockchainResolver $resolver)
     {
         $validated = $request->validate([
+				'network' => [
+					'required',
+					Rule::in(BlockchainResolver::supportedNetworks()),
+				],
 				'address' => [
 					'required',
 					'string',
-					'regex:/^0x[a-fA-F0-9]{40}$/',
+					function ($attribute, $value, $fail) use ($request, $resolver) {
+						$network = $request->input('network');
+
+						if (!in_array($network, BlockchainResolver::supportedNetworks(), true)) {
+							return;
+						}
+
+						$service = $resolver->resolve($network);
+
+						if (!preg_match($service->addressPattern(), $value)) {
+							$fail('Endereço inválido para a blockchain selecionada.');
+						}
+					},
 					Rule::unique('wallets', 'address'),
-				],
-				'network' => [
-					'required',
-					'in:ethereum',
 				],
 		]);
 
