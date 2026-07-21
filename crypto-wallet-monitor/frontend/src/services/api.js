@@ -57,4 +57,8 @@ export function getPrices() {
   return api.get('/prices');
 }
 
+export function getWalletHistory(walletId, period) {
+  return api.get(`/wallets/${walletId}/history`, { params: { period } });
+}
+
 export default api;

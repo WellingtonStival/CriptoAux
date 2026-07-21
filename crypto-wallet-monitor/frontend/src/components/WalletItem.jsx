@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { getWalletBalance } from "../services/api";
 import { NETWORKS } from "../config/networks";
 import PriceChangeBadge from "./PriceChangeBadge";
@@ -79,17 +80,26 @@ function WalletItem({ wallet, prices }) {
 
       {error && <div className="mb-3 text-sm text-red-400">{error}</div>}
 
-      <button
-        onClick={handleLoadBalance}
-        disabled={loading}
-        className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-      >
-        {loading
-          ? "Consultando..."
-          : balance === null
-          ? "Ver saldo"
-          : "Atualizar saldo"}
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleLoadBalance}
+          disabled={loading}
+          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
+        >
+          {loading
+            ? "Consultando..."
+            : balance === null
+            ? "Ver saldo"
+            : "Atualizar saldo"}
+        </button>
+
+        <Link
+          to={`/wallets/${wallet.id}/history`}
+          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
+        >
+          Ver histórico
+        </Link>
+      </div>
     </li>
   );
 }
