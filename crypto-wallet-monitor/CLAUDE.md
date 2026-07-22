@@ -27,6 +27,44 @@ já tem, calculada a partir de quando a wallet foi cadastrada no sistema —
 **não** é necessário rastrear o preço de aquisição/custo de compra
 retroativo (ideia de "aporte" foi levantada e descartada por ora).
 
+## Direção estratégica e como atuar neste projeto (Wellington, 2026-07-22)
+
+A ambição do produto: evoluir de "monitor" para uma **plataforma
+profissional de gestão de patrimônio em cripto (SaaS)**, pensando em
+milhares de usuários. Isso **não contradiz** o "não é exchange" acima —
+produtos como CoinStats/Delta/Zerion são exatamente isso: monitoramento e
+analytics sofisticados, sem trading/custódia, e ainda assim servem
+milhões de usuários. O que muda é o nível de exigência em arquitetura,
+segurança, performance e UX — não o escopo funcional (continua sem
+compra/venda).
+
+**Qualquer agente (Claude, Codex, etc.) trabalhando neste repo deve atuar
+como CTO + Arquiteto de Software + PM + Engenheiro Sênior**, com estas
+regras de condução:
+
+- Priorizar sempre nesta ordem: **confiabilidade → performance →
+  arquitetura → UX → novas funcionalidades**. Não empilhar feature nova
+  em cima de base frágil.
+- **Não concordar automaticamente** com as ideias do Wellington. Fazer
+  análise crítica, propor alternativas quando fizer mais sentido, e
+  explicar o impacto técnico *e* de negócio antes de implementar.
+- Quando ele pedir uma implementação: **primeiro** apresentar a solução
+  de arquitetura + plano de execução + impactos/riscos, **só depois**
+  partir pro código. (Isso não substitui o hábito já existente de
+  explicar antes de mudança estrutural — reforça e formaliza.)
+- Organizar sugestões de roadmap por prioridade e impacto, não por ordem
+  de chegada.
+
+Áreas de funcionalidade futura que ele quer ver avaliadas (não
+implementar direto — discutir prioridade/abordagem antes): dashboard
+consolidado de patrimônio, evolução patrimonial histórica, análise de
+risco/concentração de carteira, alertas inteligentes (movimentação,
+saldo, preço), integração com múltiplas blockchains/exchanges (read-only),
+suporte a tokens e NFTs, notificações (email/Telegram/Discord/push),
+insights com IA, análise de security approvals (aprovações de contrato
+arriscadas), métricas de performance, dashboards financeiros, e recursos
+premium para um futuro modelo de cobrança SaaS.
+
 ## Stack
 
 **Backend**: Laravel 12, PHP 8.4, PostgreSQL, Laravel Sanctum (auth via
@@ -48,7 +86,7 @@ crypto-wallet-monitor/
 │   ├── app/Http/Controllers/   AuthController, PasswordResetController,
 │   │                             WalletController, WalletBalanceController,
 │   │                             WalletHistoryController, WalletTransactionController,
-│   │                             PriceController
+│   │                             PriceController, PortfolioController
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
 │   ├── app/Notifications/       ResetPasswordNotification (linka pro frontend)
 │   ├── app/Services/Blockchain/ BlockchainServiceInterface, TransactionHistoryProvider,
@@ -62,16 +100,17 @@ crypto-wallet-monitor/
 │   │                             WalletTransactionControllerTest, EthereumServiceTest,
 │   │                             SolanaServiceTest, BitcoinServiceTest, PriceServiceTest,
 │   │                             PriceControllerTest, CaptureWalletBalancesCommandTest,
-│   │                             BalanceHistoryRecorderTest
+│   │                             BalanceHistoryRecorderTest, PortfolioControllerTest
 │   └── routes/api.php, routes/console.php (agendamento)
 └── frontend/             # React + Vite + Tailwind
     └── src/
         ├── context/AuthContext.jsx
-        ├── components/  Layout, PrivateRoute, WalletForm, WalletList, WalletItem,
-        │                 PricesPanel, PriceChangeBadge, PortfolioSummary,
-        │                 TradingViewChart, TransactionList
+        ├── components/  Layout (com navegação Dashboard/Wallets), PrivateRoute,
+        │                 WalletForm, WalletList, WalletItem, PricesPanel,
+        │                 PriceChangeBadge, TradingViewChart, TransactionList
         ├── pages/       Login, Register, ForgotPassword, ResetPassword,
-        │                 Wallets, WalletHistory
+        │                 Dashboard (tela inicial "/"), Wallets ("/wallets"),
+        │                 WalletHistory
         └── services/    api.js (axios + interceptors)
 ```
 
@@ -94,7 +133,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (67 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (73 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -167,6 +206,17 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   (reaproveita `BlockchainResolver::supportedNetworks()` como IDs da
   CoinGecko — eles coincidem hoje). Exposto em `GET /api/prices`, cacheado
   por 60s.
+- **Patrimônio consolidado**: `GET /api/portfolio/history?period=...`
+  (`PortfolioController`) agrega `wallet_balance_histories` de **todas as
+  wallets do usuário** num único valor por período, mais a distribuição
+  atual por rede (`allocation`). Como wallets não são capturadas no exato
+  mesmo instante, os snapshots são agrupados em "baldes" de tempo (hora
+  pra 24h/7d, dia pra 30d) e, dentro de cada balde, só o snapshot mais
+  recente de cada wallet conta (evita contar duas vezes). Alocação usa o
+  último snapshot de cada wallet, independente do período do gráfico.
+  Feito em PHP/Collections (não SQL bruto) para ficar simples de
+  ler/testar — se o volume de dados crescer muito (milhares de usuários),
+  isso é candidato a virar uma agregação no banco ou cache.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -204,10 +254,15 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   **widget oficial do TradingView** (`TradingViewChart.jsx`, carrega
   `s3.tradingview.com/tv.js` dinamicamente) com o gráfico de candles real
   da moeda (símbolo mapeado pra par da Binance, ex: `BINANCE:ETHUSDT`).
-- **Valor total do portfólio** (`PortfolioSummary.jsx`): soma
-  saldo × preço de todas as wallets, calculado no frontend a partir dos
-  saldos que cada `WalletItem` já busca (reportados ao componente pai via
-  `onBalanceLoaded`) e do `PricesPanel`. Aparece no topo de `Wallets.jsx`.
+- **Dashboard consolidado** (`Dashboard.jsx`, `/` — **tela inicial** do
+  app): indicadores (valor atual, variação no período, mín/máx), gráfico
+  de evolução do patrimônio total (soma de todas as wallets) e
+  distribuição por moeda (barras coloridas por rede), tudo a partir de
+  `GET /api/portfolio/history`. Também mostra o `PricesPanel` (cotações
+  gerais). `Wallets.jsx` deixou de ser a tela inicial — virou `/wallets`,
+  tela de **gerenciamento** (cadastrar/renomear/remover), sem os
+  indicadores agregados (esses ficaram só no Dashboard). `Layout.jsx`
+  ganhou navegação entre as duas ("Dashboard" / "Minhas Wallets").
 - **Lista de transações** (`TransactionList.jsx`, dentro da tela de
   histórico): mostra as últimas transações da wallet (direção, valor,
   data, link pro explorer). Para Ethereum, mostra aviso de "ainda não
@@ -276,6 +331,10 @@ chave)
 
 **Fase 2.1 — Nome da wallet + recuperação de senha** ✅ concluída, incluindo
 envio real de email via Resend (testado ponta a ponta)
+
+**Fase 2.2 — Dashboard consolidado de patrimônio** ✅ concluída: virou a
+tela inicial, com evolução agregada de todas as wallets e distribuição
+por moeda. `Wallets.jsx` passou a ser a tela de gerenciamento (`/wallets`)
 
 **Fase 2 — Completar funcionalidades** (atual)
 Ideias já levantadas: feed de transações do Ethereum (via Etherscan, pede
