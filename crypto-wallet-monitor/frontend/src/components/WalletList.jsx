@@ -1,6 +1,6 @@
 import WalletItem from "./WalletItem";
 
-function WalletList({ wallets, prices, onDeleted, onBalanceLoaded }) {
+function WalletList({ wallets, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   return (
     <ul className="flex flex-col gap-3">
       {wallets.map(wallet => (
@@ -10,6 +10,7 @@ function WalletList({ wallets, prices, onDeleted, onBalanceLoaded }) {
           prices={prices}
           onDeleted={onDeleted}
           onBalanceLoaded={onBalanceLoaded}
+          onRenamed={onRenamed}
         />
       ))}
     </ul>

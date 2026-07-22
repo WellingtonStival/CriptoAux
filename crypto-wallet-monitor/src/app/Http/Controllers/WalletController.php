@@ -34,16 +34,38 @@ class WalletController extends Controller
 					},
 					Rule::unique('wallets', 'address'),
 				],
+				'name' => ['nullable', 'string', 'max:255'],
 		]);
 
         $wallet = Wallet::create([
             'address' => $validated['address'],
+			'name' => $validated['name'] ?? null,
 			'network' => $validated['network'],
 			'user_id' => $request->user()->id,
         ]);
 
         return response()->json($wallet, 201);
     }
+	public function update(Request $request, $id)
+	{
+		$wallet = Wallet::where('id', $id)
+			->where('user_id', $request->user()->id)
+			->first();
+
+		if (!$wallet) {
+			return response()->json([
+				'message' => 'Carteira não encontrada',
+			], 404);
+		}
+
+		$validated = $request->validate([
+			'name' => ['nullable', 'string', 'max:255'],
+		]);
+
+		$wallet->update(['name' => $validated['name'] ?? null]);
+
+		return response()->json($wallet);
+	}
 	public function index(Request $request)
 	{
 		return response()->json(

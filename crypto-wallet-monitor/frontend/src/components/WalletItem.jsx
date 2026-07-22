@@ -1,12 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { getWalletBalance, deleteWallet } from "../services/api";
+import { getWalletBalance, deleteWallet, renameWallet } from "../services/api";
 import { NETWORKS } from "../config/networks";
 import PriceChangeBadge from "./PriceChangeBadge";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded }) {
+function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   const networkConfig = NETWORKS[wallet.network] ?? {
     label: wallet.network,
     symbol: "",
@@ -17,6 +17,9 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded }) {
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(wallet.name ?? "");
+  const [savingName, setSavingName] = useState(false);
 
   useEffect(() => {
     const cached = localStorage.getItem(`wallet_balance_${wallet.id}`);
@@ -67,14 +70,85 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded }) {
     }
   }
 
+  function handleStartEditingName() {
+    setNameDraft(wallet.name ?? "");
+    setEditingName(true);
+  }
+
+  async function handleSaveName() {
+    setSavingName(true);
+    setError(null);
+
+    try {
+      const response = await renameWallet(wallet.id, nameDraft.trim());
+      onRenamed?.(wallet.id, response.data.name);
+      setEditingName(false);
+    } catch {
+      setError("Não foi possível salvar o nome.");
+    } finally {
+      setSavingName(false);
+    }
+  }
+
   const price = prices?.[wallet.network];
   const valueUsd = balance !== null && price ? balance * price.usd : null;
 
   return (
     <li className="rounded-lg border border-slate-800 bg-slate-950 p-4">
       <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="break-all font-medium text-slate-50">
-          {wallet.address}
+        <div className="min-w-0 flex-1">
+          {editingName ? (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <input
+                type="text"
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+                placeholder="Nome da carteira"
+                autoComplete="off"
+                disabled={savingName}
+                className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={savingName}
+                className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-60"
+              >
+                {savingName ? "Salvando..." : "Salvar"}
+              </button>
+              <button
+                onClick={() => setEditingName(false)}
+                disabled={savingName}
+                className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5">
+              {wallet.name ? (
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-slate-50">
+                    {wallet.name}
+                  </div>
+                  <div className="truncate text-xs text-slate-500">
+                    {wallet.address}
+                  </div>
+                </div>
+              ) : (
+                <div className="break-all font-medium text-slate-50">
+                  {wallet.address}
+                </div>
+              )}
+
+              <button
+                onClick={handleStartEditingName}
+                title="Editar nome"
+                className="shrink-0 text-xs text-slate-500 hover:text-slate-300"
+              >
+                ✎
+              </button>
+            </div>
+          )}
         </div>
 
         {confirmingDelete ? (

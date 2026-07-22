@@ -67,6 +67,14 @@ function Wallets() {
     }));
   }
 
+  function handleWalletRenamed(walletId, name) {
+    setWallets((currentWallets) =>
+      currentWallets.map((wallet) =>
+        wallet.id === walletId ? { ...wallet, name } : wallet
+      )
+    );
+  }
+
   return (
     <Layout>
       <h1 className="mb-6 text-2xl font-bold text-slate-50">
@@ -99,6 +107,7 @@ function Wallets() {
           prices={prices}
           onDeleted={handleWalletDeleted}
           onBalanceLoaded={handleBalanceLoaded}
+          onRenamed={handleWalletRenamed}
         />
       )}
     </Layout>

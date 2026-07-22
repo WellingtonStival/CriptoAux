@@ -22,6 +22,7 @@ const ADDRESS_PLACEHOLDERS = {
 function WalletForm({ onCreated }) {
   const [network, setNetwork] = useState("ethereum");
   const [address, setAddress] = useState("");
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -39,9 +40,10 @@ function WalletForm({ onCreated }) {
     setError("");
 
     try {
-      const response = await createWallet(normalizedAddress, network);
+      const response = await createWallet(normalizedAddress, network, name.trim());
       onCreated(response.data);
       setAddress("");
+      setName("");
     } catch (requestError) {
       const validationErrors = requestError.response?.data?.errors;
       const firstError =
@@ -101,6 +103,26 @@ function WalletForm({ onCreated }) {
             className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
           />
         </div>
+      </div>
+
+      <div className="mt-3">
+        <label
+          htmlFor="wallet-name"
+          className="mb-1.5 block text-sm text-slate-300"
+        >
+          Nome (opcional)
+        </label>
+
+        <input
+          id="wallet-name"
+          type="text"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Ex: Carteira do Trezor"
+          autoComplete="off"
+          disabled={saving}
+          className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
+        />
       </div>
 
       <button

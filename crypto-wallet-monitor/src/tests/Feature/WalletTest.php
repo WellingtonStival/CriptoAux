@@ -49,6 +49,24 @@ class WalletTest extends TestCase
         ]);
     }
 
+    public function test_user_can_create_a_wallet_with_a_name(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/wallets', [
+            'address' => '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            'network' => 'ethereum',
+            'name' => 'Minha carteira fria',
+        ]);
+
+        $response->assertStatus(201)->assertJsonPath('name', 'Minha carteira fria');
+        $this->assertDatabaseHas('wallets', [
+            'address' => '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            'name' => 'Minha carteira fria',
+        ]);
+    }
+
     public function test_wallet_address_must_match_ethereum_format(): void
     {
         $user = User::factory()->create();
@@ -178,5 +196,37 @@ class WalletTest extends TestCase
 
         $response->assertStatus(404);
         $this->assertDatabaseHas('wallets', ['id' => $wallet->id]);
+    }
+
+    public function test_user_can_rename_their_own_wallet(): void
+    {
+        $user = User::factory()->create();
+        $wallet = Wallet::factory()->for($user)->create(['name' => null]);
+        Sanctum::actingAs($user);
+
+        $response = $this->patchJson("/api/wallets/{$wallet->id}", [
+            'name' => 'Carteira do Trezor',
+        ]);
+
+        $response->assertStatus(200)->assertJsonPath('name', 'Carteira do Trezor');
+        $this->assertDatabaseHas('wallets', [
+            'id' => $wallet->id,
+            'name' => 'Carteira do Trezor',
+        ]);
+    }
+
+    public function test_user_cannot_rename_another_users_wallet(): void
+    {
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $wallet = Wallet::factory()->for($otherUser)->create();
+
+        Sanctum::actingAs($user);
+
+        $response = $this->patchJson("/api/wallets/{$wallet->id}", [
+            'name' => 'Tentativa indevida',
+        ]);
+
+        $response->assertStatus(404);
     }
 }
