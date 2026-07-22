@@ -20,11 +20,19 @@ Objetivo de negócio: levar o sistema para operação real, com usuários de
 verdade — não é só um projeto de estudo, embora o desenvolvimento também
 tenha propósito didático (veja "Como colaborar" abaixo).
 
+**Escopo explícito (Wellington, 2026-07-22): é um monitor, não uma
+exchange.** Sem compra/venda, sem book de ofertas, nada de trading. O
+objetivo é acompanhar valorização/desvalorização das moedas que a pessoa
+já tem, calculada a partir de quando a wallet foi cadastrada no sistema —
+**não** é necessário rastrear o preço de aquisição/custo de compra
+retroativo (ideia de "aporte" foi levantada e descartada por ora).
+
 ## Stack
 
 **Backend**: Laravel 12, PHP 8.4, PostgreSQL, Laravel Sanctum (auth via
-Bearer token). Consulta blockchain via RPC (Ethereum, Solana) ou API REST
-de indexador (Bitcoin, via Blockstream).
+Bearer token), `resend/resend-php` (recuperação de senha por email).
+Consulta blockchain via RPC (Ethereum, Solana) ou API REST de indexador
+(Bitcoin, via Blockstream).
 **Frontend**: React 19, Vite, React Router 7, Axios, Tailwind CSS.
 **Infra**: Docker Compose (4 serviços: `app`, `scheduler`, `db`, `frontend`).
 `scheduler` roda `php artisan schedule:work` — necessário para os
@@ -37,26 +45,33 @@ crypto-wallet-monitor/
 ├── docker-compose.yml
 ├── docker/php/Dockerfile
 ├── src/                 # Laravel (backend)
-│   ├── app/Http/Controllers/   AuthController, WalletController,
-│   │                             WalletBalanceController, WalletHistoryController,
+│   ├── app/Http/Controllers/   AuthController, PasswordResetController,
+│   │                             WalletController, WalletBalanceController,
+│   │                             WalletHistoryController, WalletTransactionController,
 │   │                             PriceController
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
-│   ├── app/Services/Blockchain/ BlockchainServiceInterface, EthereumService,
-│   │                             SolanaService, BitcoinService, BlockchainResolver
+│   ├── app/Notifications/       ResetPasswordNotification (linka pro frontend)
+│   ├── app/Services/Blockchain/ BlockchainServiceInterface, TransactionHistoryProvider,
+│   │                             EthereumService, SolanaService, BitcoinService,
+│   │                             BlockchainResolver
 │   ├── app/Services/Market/     PriceService (cotações via CoinGecko)
 │   ├── app/Services/Wallet/     BalanceHistoryRecorder (salva snapshot)
 │   ├── app/Console/Commands/    CaptureWalletBalances (agendado de hora em hora)
-│   ├── tests/Feature/           AuthTest, WalletTest, WalletBalanceTest,
-│   │                             WalletHistoryControllerTest, EthereumServiceTest,
+│   ├── tests/Feature/           AuthTest, PasswordResetTest, WalletTest,
+│   │                             WalletBalanceTest, WalletHistoryControllerTest,
+│   │                             WalletTransactionControllerTest, EthereumServiceTest,
 │   │                             SolanaServiceTest, BitcoinServiceTest, PriceServiceTest,
-│   │                             PriceControllerTest, CaptureWalletBalancesCommandTest
+│   │                             PriceControllerTest, CaptureWalletBalancesCommandTest,
+│   │                             BalanceHistoryRecorderTest
 │   └── routes/api.php, routes/console.php (agendamento)
 └── frontend/             # React + Vite + Tailwind
     └── src/
         ├── context/AuthContext.jsx
-        ├── components/  Layout, PrivateRoute, WalletForm, WalletList,
-        │                 WalletItem, PricesPanel, PriceChangeBadge
-        ├── pages/       Login, Register, Wallets, WalletHistory
+        ├── components/  Layout, PrivateRoute, WalletForm, WalletList, WalletItem,
+        │                 PricesPanel, PriceChangeBadge, PortfolioSummary,
+        │                 TradingViewChart, TransactionList
+        ├── pages/       Login, Register, ForgotPassword, ResetPassword,
+        │                 Wallets, WalletHistory
         └── services/    api.js (axios + interceptors)
 ```
 
@@ -79,12 +94,25 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (52 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (67 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
-- Rotas protegidas: `GET/POST /api/wallets`, `DELETE /api/wallets/{id}`,
-  `GET /api/wallets/{id}/balance`
+- **Recuperação de senha por email**: `POST /api/forgot-password` (sempre
+  retorna a mesma mensagem, exista ou não o email, pra não vazar quais
+  emails estão cadastrados) e `POST /api/reset-password` (token + email +
+  nova senha). `User::sendPasswordResetNotification()` foi sobrescrito
+  para linkar pro frontend (`/redefinir-senha?token=...&email=...`) em vez
+  da rota web padrão do Laravel, que não existe nesta API.
+  **Envio real configurado e testado** — `MAIL_MAILER=resend` com
+  `RESEND_API_KEY` no `.env` local (não commitado). `MAIL_FROM_ADDRESS` é
+  `onboarding@resend.dev` (remetente de teste da Resend, funciona sem
+  verificar domínio, mas só entrega pro email cadastrado na conta Resend
+  até um domínio próprio ser verificado — modo sandbox deles). Testado
+  ponta a ponta em 2026-07-22: email chegou de verdade na caixa de entrada
+  do Wellington e a senha foi redefinida com sucesso.
+- Rotas protegidas: `GET/POST /api/wallets`, `PATCH /api/wallets/{id}`
+  (renomear), `DELETE /api/wallets/{id}`, `GET /api/wallets/{id}/balance`
 - **Multi-blockchain implementado**: Ethereum, Solana e Bitcoin, cada um
   com sua classe em `app/Services/Blockchain/` implementando
   `BlockchainServiceInterface` (`getBalance()`, `symbol()`,
@@ -100,6 +128,18 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
     (`blockstream.info/api/address/{address}`), porque um nó Bitcoin não
     expõe "saldo de um endereço" sem indexar todos os UTXOs
   - Todos cacheiam por 60s
+- **Histórico de transações (Solana e Bitcoin apenas)**: interface
+  `TransactionHistoryProvider` (separada de `BlockchainServiceInterface`,
+  só `SolanaService` e `BitcoinService` implementam — Ethereum ainda não,
+  porque a RPC pública usada para saldo não lista transações; exigiria uma
+  API indexadora tipo Etherscan, que pede chave de API — decisão adiada).
+  `GET /api/wallets/{id}/transactions` retorna `supported: false` e lista
+  vazia para redes sem suporte (hoje só Ethereum), ou a lista de
+  transações (hash, direção in/out, valor, timestamp, link pro explorer)
+  para Solana/Bitcoin. Solana faz `getSignaturesForAddress` + uma chamada
+  `getTransaction` por assinatura (calcula a variação de saldo da própria
+  conta); Bitcoin usa `/address/{address}/txs` do Blockstream (soma
+  vout/vin do endereço, cobrindo troco corretamente).
 - **Histórico de saldo implementado**: a tabela `wallet_balance_histories`
   agora tem coluna `price_usd` além de `balance`. `BalanceHistoryRecorder`
   salva um snapshot (`App\Services\Wallet\BalanceHistoryRecorder::capture()`)
@@ -117,6 +157,10 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   agora atualiza o saldo sozinho a cada ~60s (ver abaixo), e sem esse
   limite cada wallet geraria um ponto de histórico por minuto só de
   alguém deixar a aba aberta.
+- **Nome da wallet**: coluna `name` (nullable) em `wallets`. Opcional no
+  `POST /api/wallets` e editável via `PATCH /api/wallets/{id}` (só o nome
+  — endereço/rede não são editáveis, trocar isso seria cadastrar outra
+  wallet).
 - **Cotações**: `App\Services\Market\PriceService` consulta a API pública
   da CoinGecko (`/coins/markets`) e retorna, por rede suportada: preço USD,
   variação 24h/7d/30d, market cap, volume 24h e máxima/mínima 24h
@@ -164,6 +208,17 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   saldo × preço de todas as wallets, calculado no frontend a partir dos
   saldos que cada `WalletItem` já busca (reportados ao componente pai via
   `onBalanceLoaded`) e do `PricesPanel`. Aparece no topo de `Wallets.jsx`.
+- **Lista de transações** (`TransactionList.jsx`, dentro da tela de
+  histórico): mostra as últimas transações da wallet (direção, valor,
+  data, link pro explorer). Para Ethereum, mostra aviso de "ainda não
+  disponível" em vez de lista vazia. Formatadores de data/moeda
+  compartilhados em `frontend/src/utils/format.js`.
+- **Nome da wallet**: campo opcional "Nome" no `WalletForm` ao cadastrar;
+  edição inline (ícone de lápis) em cada `WalletItem`, mesmo padrão visual
+  da confirmação de exclusão (sem `window.prompt()`/modal nativo).
+- **Recuperação de senha**: link "Esqueci minha senha" no Login →
+  `ForgotPassword.jsx` (`/esqueci-senha`) → `ResetPassword.jsx`
+  (`/redefinir-senha`, lê `token`/`email` da URL via `useSearchParams`).
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -214,8 +269,17 @@ inline
 valor total do portfólio, dados de mercado (market cap/volume/máx-mín/
 variação 7d/30d) e gráfico de candles real via widget do TradingView
 
+**Fase 2.0 — Feed de transações (Solana e Bitcoin)** ✅ concluída: últimas
+transações por wallet, com direção/valor/data/link pro explorer. Ethereum
+fica pendente (precisa decidir sobre usar a API do Etherscan, que exige
+chave)
+
+**Fase 2.1 — Nome da wallet + recuperação de senha** ✅ concluída, incluindo
+envio real de email via Resend (testado ponta a ponta)
+
 **Fase 2 — Completar funcionalidades** (atual)
-Ideias já levantadas: Kaspa (blockchain adicional) → alertas de
+Ideias já levantadas: feed de transações do Ethereum (via Etherscan, pede
+chave de API) → Kaspa (blockchain adicional) → alertas de
 variação/movimentação. Perguntar ao Wellington a prioridade dentro desta
 lista antes de escolher a próxima.
 
