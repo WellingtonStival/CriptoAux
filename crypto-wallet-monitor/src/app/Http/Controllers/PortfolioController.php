@@ -17,8 +17,9 @@ class PortfolioController extends Controller
     /**
      * Agrega o historico de saldo de todas as wallets do usuario num unico
      * valor de patrimonio ao longo do tempo, mais a distribuicao atual por
-     * rede. Diferente de WalletHistoryController (uma wallet so), aqui
-     * cada ponto do grafico e a soma de todas as wallets.
+     * rede e a concentracao (por rede e por wallet). Diferente de
+     * WalletHistoryController (uma wallet so), aqui cada ponto do grafico e
+     * a soma de todas as wallets.
      *
      * Como wallets nao sao necessariamente capturadas no mesmo instante
      * exato (o job agendado passa por elas em sequencia, e checagens
@@ -30,7 +31,8 @@ class PortfolioController extends Controller
      */
     public function history(Request $request)
     {
-        $walletIds = $request->user()->wallets()->pluck('id');
+        $wallets = $request->user()->wallets()->get(['id', 'address', 'name']);
+        $walletIds = $wallets->pluck('id');
 
         $period = $request->query('period', '7d');
         $config = self::PERIODS[$period] ?? null;
@@ -50,14 +52,28 @@ class PortfolioController extends Controller
             ])
             ->values();
 
-        // Alocacao atual usa o ultimo snapshot de cada wallet, independente
-        // do periodo selecionado no grafico.
+        // Alocacao/concentracao atuais usam o ultimo snapshot de cada
+        // wallet, independente do periodo selecionado no grafico.
         $latestOverall = $this->latestPerWallet(
             WalletBalanceHistory::whereIn('wallet_id', $walletIds)->orderBy('captured_at')->get()
         );
 
         $currentValueUsd = $latestOverall->sum(fn ($row) => $this->valueOf($row));
-        $allocation = $this->allocationByNetwork($latestOverall, $currentValueUsd);
+
+        $networkTotals = $latestOverall->groupBy('network')
+            ->map(fn ($rows) => $rows->sum(fn ($row) => $this->valueOf($row)));
+
+        $walletTotals = $latestOverall->mapWithKeys(
+            fn ($row) => [$row->wallet_id => $this->valueOf($row)]
+        );
+
+        $allocation = $networkTotals
+            ->map(fn ($valueUsd, $network) => [
+                'network' => $network,
+                'value_usd' => $valueUsd,
+                'percent' => $currentValueUsd > 0 ? ($valueUsd / $currentValueUsd) * 100 : 0,
+            ])
+            ->values();
 
         $first = $points->first();
         $last = $points->last();
@@ -78,6 +94,10 @@ class PortfolioController extends Controller
                 'max_value_usd' => $points->max('value_usd'),
             ],
             'allocation' => $allocation,
+            'concentration' => [
+                'by_network' => $this->networkConcentration($networkTotals, $currentValueUsd),
+                'by_wallet' => $this->walletConcentration($walletTotals, $currentValueUsd, $wallets),
+            ],
         ]);
     }
 
@@ -96,16 +116,75 @@ class PortfolioController extends Controller
         return $row->price_usd !== null ? $row->balance * $row->price_usd : 0.0;
     }
 
-    private function allocationByNetwork(Collection $latestPerWallet, float $total): Collection
+    /**
+     * Indice de Herfindahl-Hirschman (HHI): soma dos quadrados dos
+     * percentuais de cada posicao. Quanto maior, mais concentrado.
+     * Padrao de mercado para medir concentracao/diversificacao (usado ate
+     * em analise antitruste). Faixa 0-10000: <1500 diversificado,
+     * 1500-2500 moderado, >2500 concentrado.
+     *
+     * Chamado "concentracao", nao "risco": e um fato objetivo sobre a
+     * distribuicao do patrimonio, nao uma opiniao/recomendacao de
+     * investimento.
+     */
+    private function concentrationSummary(Collection $valuesByKey, float $total): array
     {
-        return $latestPerWallet
-            ->groupBy('network')
-            ->map(fn ($rows, $network) => $rows->sum(fn ($row) => $this->valueOf($row)))
-            ->map(fn ($valueUsd, $network) => [
-                'network' => $network,
-                'value_usd' => $valueUsd,
-                'percent' => $total > 0 ? ($valueUsd / $total) * 100 : 0,
-            ])
-            ->values();
+        if ($total <= 0 || $valuesByKey->isEmpty()) {
+            return [
+                'hhi' => 0.0,
+                'level' => 'indefinido',
+                'top_percent' => 0.0,
+                'top_key' => null,
+            ];
+        }
+
+        $percentages = $valuesByKey->map(fn ($value) => ($value / $total) * 100);
+        $hhi = round($percentages->sum(fn ($percent) => $percent ** 2), 1);
+        $topKey = $percentages->sortDesc()->keys()->first();
+
+        return [
+            'hhi' => $hhi,
+            'level' => match (true) {
+                $hhi < 1500 => 'diversificado',
+                $hhi < 2500 => 'moderado',
+                default => 'concentrado',
+            },
+            'top_percent' => round($percentages[$topKey], 1),
+            'top_key' => $topKey,
+        ];
+    }
+
+    private function networkConcentration(Collection $networkTotals, float $total): array
+    {
+        $summary = $this->concentrationSummary($networkTotals, $total);
+
+        $summary['top_network'] = $summary['top_key'];
+        unset($summary['top_key']);
+
+        return $summary;
+    }
+
+    private function walletConcentration(Collection $walletTotals, float $total, Collection $wallets): array
+    {
+        $summary = $this->concentrationSummary($walletTotals, $total);
+
+        $topWallet = $summary['top_key'] !== null
+            ? $wallets->firstWhere('id', $summary['top_key'])
+            : null;
+
+        $summary['top_wallet_label'] = $topWallet
+            ? ($topWallet->name ?: $this->shortAddress($topWallet->address))
+            : null;
+
+        unset($summary['top_key']);
+
+        return $summary;
+    }
+
+    private function shortAddress(string $address): string
+    {
+        return strlen($address) > 12
+            ? substr($address, 0, 6) . '...' . substr($address, -4)
+            : $address;
     }
 }

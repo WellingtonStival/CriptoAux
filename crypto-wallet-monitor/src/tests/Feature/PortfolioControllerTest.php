@@ -27,7 +27,9 @@ class PortfolioControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertJsonPath('points', [])
             ->assertJsonPath('allocation', [])
-            ->assertJsonPath('summary.current_value_usd', 0);
+            ->assertJsonPath('summary.current_value_usd', 0)
+            ->assertJsonPath('concentration.by_network.level', 'indefinido')
+            ->assertJsonPath('concentration.by_wallet.level', 'indefinido');
     }
 
     public function test_aggregates_value_across_multiple_wallets(): void
@@ -126,6 +128,100 @@ class PortfolioControllerTest extends TestCase
 
         $response->assertJsonCount(1, 'points');
         $this->assertEqualsWithDelta(1100.0, $response->json('points.0.value_usd'), 0.001);
+    }
+
+    public function test_computes_concentration_by_network(): void
+    {
+        $user = User::factory()->create();
+        $ethWallet = Wallet::factory()->for($user)->create(['network' => 'ethereum']);
+        $solWallet = Wallet::factory()->for($user)->create(['network' => 'solana']);
+
+        WalletBalanceHistory::create([
+            'wallet_id' => $ethWallet->id,
+            'network' => 'ethereum',
+            'balance' => 1,
+            'price_usd' => 1500, // 75%
+            'captured_at' => now(),
+        ]);
+
+        WalletBalanceHistory::create([
+            'wallet_id' => $solWallet->id,
+            'network' => 'solana',
+            'balance' => 10,
+            'price_usd' => 50, // 25%
+            'captured_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/portfolio/history');
+
+        // HHI = 75^2 + 25^2 = 6250 -> "concentrado" (> 2500)
+        $response->assertJsonPath('concentration.by_network.top_network', 'ethereum')
+            ->assertJsonPath('concentration.by_network.level', 'concentrado');
+
+        $this->assertEqualsWithDelta(
+            6250.0,
+            $response->json('concentration.by_network.hhi'),
+            0.5
+        );
+        $this->assertEqualsWithDelta(
+            75.0,
+            $response->json('concentration.by_network.top_percent'),
+            0.1
+        );
+    }
+
+    public function test_wallet_concentration_uses_the_wallet_name_when_set(): void
+    {
+        $user = User::factory()->create();
+        $namedWallet = Wallet::factory()->for($user)->create(['name' => 'Carteira principal']);
+        $otherWallet = Wallet::factory()->for($user)->create(['name' => null]);
+
+        WalletBalanceHistory::create([
+            'wallet_id' => $namedWallet->id,
+            'network' => $namedWallet->network,
+            'balance' => 1,
+            'price_usd' => 9000,
+            'captured_at' => now(),
+        ]);
+
+        WalletBalanceHistory::create([
+            'wallet_id' => $otherWallet->id,
+            'network' => $otherWallet->network,
+            'balance' => 1,
+            'price_usd' => 1000,
+            'captured_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/portfolio/history');
+
+        $response->assertJsonPath('concentration.by_wallet.top_wallet_label', 'Carteira principal');
+    }
+
+    public function test_wallet_concentration_uses_a_short_address_when_the_wallet_has_no_name(): void
+    {
+        $user = User::factory()->create();
+        $wallet = Wallet::factory()->for($user)->create([
+            'name' => null,
+            'address' => '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+        ]);
+
+        WalletBalanceHistory::create([
+            'wallet_id' => $wallet->id,
+            'network' => $wallet->network,
+            'balance' => 1,
+            'price_usd' => 1000,
+            'captured_at' => now(),
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/portfolio/history');
+
+        $response->assertJsonPath('concentration.by_wallet.top_wallet_label', '0xd8dA...6045');
     }
 
     public function test_does_not_include_another_users_wallets(): void

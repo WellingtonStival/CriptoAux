@@ -23,6 +23,13 @@ const PERIODS = [
   { value: "all", label: "Tudo" },
 ];
 
+const CONCENTRATION_LEVELS = {
+  diversificado: { label: "Diversificado", className: "bg-emerald-500/15 text-emerald-400" },
+  moderado: { label: "Moderado", className: "bg-amber-500/15 text-amber-400" },
+  concentrado: { label: "Concentrado", className: "bg-red-500/15 text-red-400" },
+  indefinido: { label: "Sem dados", className: "bg-slate-500/15 text-slate-400" },
+};
+
 function Dashboard() {
   const [period, setPeriod] = useState("7d");
   const [data, setData] = useState(null);
@@ -240,6 +247,38 @@ function Dashboard() {
                   </div>
                 </div>
               )}
+
+              {data.concentration && (
+                <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
+                  <h2 className="text-sm font-medium text-slate-300">
+                    Concentração
+                  </h2>
+                  <p className="mb-3 text-xs text-slate-500">
+                    O quanto seu patrimônio está espalhado entre moedas e
+                    wallets diferentes — não é uma recomendação, é só um
+                    fato sobre a distribuição.
+                  </p>
+
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <ConcentrationCard
+                      title="Por moeda"
+                      concentration={data.concentration.by_network}
+                      topLabel={
+                        data.concentration.by_network.top_network
+                          ? NETWORKS[data.concentration.by_network.top_network]
+                              ?.label ?? data.concentration.by_network.top_network
+                          : null
+                      }
+                    />
+
+                    <ConcentrationCard
+                      title="Por wallet"
+                      concentration={data.concentration.by_wallet}
+                      topLabel={data.concentration.by_wallet.top_wallet_label}
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </>
@@ -247,6 +286,31 @@ function Dashboard() {
 
       <PricesPanel prices={prices} />
     </Layout>
+  );
+}
+
+function ConcentrationCard({ title, concentration, topLabel }) {
+  const level = CONCENTRATION_LEVELS[concentration.level] ?? CONCENTRATION_LEVELS.indefinido;
+
+  return (
+    <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm text-slate-300">{title}</span>
+        <span className={`rounded px-2 py-0.5 text-xs font-medium ${level.className}`}>
+          {level.label}
+        </span>
+      </div>
+
+      {topLabel ? (
+        <p className="text-sm text-slate-400">
+          Maior posição:{" "}
+          <span className="text-slate-200">{topLabel}</span> ·{" "}
+          {concentration.top_percent.toFixed(1)}% do total
+        </p>
+      ) : (
+        <p className="text-sm text-slate-500">Sem dados suficientes ainda.</p>
+      )}
+    </div>
   );
 }
 
