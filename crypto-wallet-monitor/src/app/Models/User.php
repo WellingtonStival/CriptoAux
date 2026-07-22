@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Wallet;
+use App\Notifications\ResetPasswordNotification;
 
 class User extends Authenticatable
 {
@@ -51,5 +52,18 @@ class User extends Authenticatable
 	public function wallets()
 	{
 		return $this->hasMany(Wallet::class);
+	}
+
+	/**
+	 * Sobrescreve o comportamento padrao do Laravel (que linkaria pra uma
+	 * rota web que nao existe nesta API) para apontar pro frontend React.
+	 */
+	public function sendPasswordResetNotification($token): void
+	{
+		$url = rtrim(config('frontend.url'), '/')
+			. '/redefinir-senha?token=' . $token
+			. '&email=' . urlencode($this->email);
+
+		$this->notify(new ResetPasswordNotification($url));
 	}
 }

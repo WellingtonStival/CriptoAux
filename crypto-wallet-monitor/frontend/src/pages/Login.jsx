@@ -64,6 +64,12 @@ function Login() {
         </form>
 
         <p className="mt-4 text-sm text-slate-400">
+          <Link to="/esqueci-senha" className="text-indigo-400 hover:underline">
+            Esqueci minha senha
+          </Link>
+        </p>
+
+        <p className="mt-2 text-sm text-slate-400">
           Não tem conta?{' '}
           <Link to="/register" className="text-indigo-400 hover:underline">
             Criar conta
