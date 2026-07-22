@@ -6,22 +6,38 @@ use Illuminate\Support\Facades\Http;
 use App\Services\Blockchain\Contracts\BlockchainServiceInterface;
 use App\Services\Blockchain\Contracts\TransactionHistoryProvider;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class SolanaService implements BlockchainServiceInterface, TransactionHistoryProvider
 {
     private const LAMPORTS_PER_SOL = 1_000_000_000;
 
-    /**
-     * Retorna o saldo de uma carteira Solana em SOL
-     */
-    public function getBalance(string $address): float
+    private function cacheKey(string $address): string
     {
-        $cacheKey = 'sol_balance:' . $address;
+        return 'sol_balance:' . $address;
+    }
+
+    public function getCachedBalance(string $address): ?float
+    {
+        return Cache::get($this->cacheKey($address));
+    }
+
+    /**
+     * Retorna o saldo de uma carteira Solana em SOL. Com $forceRefresh,
+     * ignora um cache ainda valido e busca ao vivo mesmo assim.
+     */
+    public function getBalance(string $address, bool $forceRefresh = false): float
+    {
+        $cacheKey = $this->cacheKey($address);
+
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
+        }
 
         return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address) {
 
-            $response = Http::post(
+            $response = Http::timeout(5)->retry(2, 200, throw: false)->post(
                 config('blockchain.solana.rpc_url'),
                 [
                     'jsonrpc' => '2.0',
@@ -32,16 +48,22 @@ class SolanaService implements BlockchainServiceInterface, TransactionHistoryPro
             );
 
             if (!$response->successful()) {
+                Log::warning('Falha ao consultar saldo Solana', [
+                    'address' => $address,
+                    'status' => $response->status(),
+                ]);
                 abort(502, 'Erro ao consultar a blockchain');
             }
 
             $json = $response->json();
 
             if (isset($json['error'])) {
+                Log::warning('Erro RPC Solana', ['address' => $address, 'error' => $json['error']]);
                 abort(502, 'Erro RPC Solana: ' . $json['error']['message']);
             }
 
             if (!isset($json['result']['value'])) {
+                Log::warning('Resposta invalida da RPC Solana', ['address' => $address]);
                 abort(502, 'Resposta inválida da blockchain');
             }
 
@@ -77,7 +99,7 @@ class SolanaService implements BlockchainServiceInterface, TransactionHistoryPro
         $cacheKey = "sol_txs:{$address}:{$limit}";
 
         return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address, $limit) {
-            $signaturesResponse = Http::post(config('blockchain.solana.rpc_url'), [
+            $signaturesResponse = Http::timeout(5)->retry(2, 200, throw: false)->post(config('blockchain.solana.rpc_url'), [
                 'jsonrpc' => '2.0',
                 'method' => 'getSignaturesForAddress',
                 'params' => [$address, ['limit' => $limit]],
@@ -85,6 +107,10 @@ class SolanaService implements BlockchainServiceInterface, TransactionHistoryPro
             ]);
 
             if (!$signaturesResponse->successful()) {
+                Log::warning('Falha ao consultar transacoes Solana', [
+                    'address' => $address,
+                    'status' => $signaturesResponse->status(),
+                ]);
                 abort(502, 'Erro ao consultar transações na blockchain');
             }
 
@@ -121,7 +147,7 @@ class SolanaService implements BlockchainServiceInterface, TransactionHistoryPro
 
     private function fetchTransactionDelta(string $address, string $signature): ?array
     {
-        $response = Http::post(config('blockchain.solana.rpc_url'), [
+        $response = Http::timeout(5)->retry(2, 200, throw: false)->post(config('blockchain.solana.rpc_url'), [
             'jsonrpc' => '2.0',
             'method' => 'getTransaction',
             'params' => [$signature, ['maxSupportedTransactionVersion' => 0]],

@@ -6,11 +6,22 @@ use Illuminate\Support\Facades\Http;
 use App\Services\Blockchain\Contracts\BlockchainServiceInterface;
 use App\Services\Blockchain\Contracts\TransactionHistoryProvider;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
 class BitcoinService implements BlockchainServiceInterface, TransactionHistoryProvider
 {
     private const SATOSHIS_PER_BTC = 100_000_000;
+
+    private function cacheKey(string $address): string
+    {
+        return 'btc_balance:' . $address;
+    }
+
+    public function getCachedBalance(string $address): ?float
+    {
+        return Cache::get($this->cacheKey($address));
+    }
 
     /**
      * Retorna o saldo de uma carteira Bitcoin em BTC.
@@ -18,25 +29,35 @@ class BitcoinService implements BlockchainServiceInterface, TransactionHistoryPr
      * Diferente do Ethereum/Solana, um no Bitcoin nao expoe "saldo de um
      * endereco" via RPC simples (exigiria indexar todos os UTXOs). Por
      * isso usamos a API publica do Blockstream (Esplora), que ja mantem
-     * esse indice pronto.
+     * esse indice pronto. Com $forceRefresh, ignora um cache ainda
+     * valido e busca ao vivo mesmo assim.
      */
-    public function getBalance(string $address): float
+    public function getBalance(string $address, bool $forceRefresh = false): float
     {
-        $cacheKey = 'btc_balance:' . $address;
+        $cacheKey = $this->cacheKey($address);
+
+        if ($forceRefresh) {
+            Cache::forget($cacheKey);
+        }
 
         return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address) {
 
-            $response = Http::get(
+            $response = Http::timeout(5)->retry(2, 200, throw: false)->get(
                 config('blockchain.bitcoin.api_url') . "/address/{$address}"
             );
 
             if (!$response->successful()) {
+                Log::warning('Falha ao consultar saldo Bitcoin', [
+                    'address' => $address,
+                    'status' => $response->status(),
+                ]);
                 abort(502, 'Erro ao consultar a blockchain');
             }
 
             $json = $response->json();
 
             if (!isset($json['chain_stats']['funded_txo_sum'], $json['chain_stats']['spent_txo_sum'])) {
+                Log::warning('Resposta invalida da API Bitcoin', ['address' => $address]);
                 abort(502, 'Resposta inválida da blockchain');
             }
 
@@ -69,11 +90,15 @@ class BitcoinService implements BlockchainServiceInterface, TransactionHistoryPr
         $cacheKey = "btc_txs:{$address}:{$limit}";
 
         return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address, $limit) {
-            $response = Http::get(
+            $response = Http::timeout(5)->retry(2, 200, throw: false)->get(
                 config('blockchain.bitcoin.api_url') . "/address/{$address}/txs"
             );
 
             if (!$response->successful()) {
+                Log::warning('Falha ao consultar transacoes Bitcoin', [
+                    'address' => $address,
+                    'status' => $response->status(),
+                ]);
                 abort(502, 'Erro ao consultar transações na blockchain');
             }
 

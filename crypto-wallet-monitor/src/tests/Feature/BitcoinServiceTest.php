@@ -46,6 +46,13 @@ class BitcoinServiceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_get_cached_balance_returns_null_on_a_cold_cache(): void
+    {
+        $balance = app(BitcoinService::class)->getCachedBalance(self::VALID_ADDRESS);
+
+        $this->assertNull($balance);
+    }
+
     public function test_aborts_with_502_when_the_response_is_invalid(): void
     {
         Http::fake([

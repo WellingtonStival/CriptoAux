@@ -2,11 +2,9 @@
 
 namespace App\Console\Commands;
 
+use App\Jobs\RefreshWalletBalance;
 use App\Models\Wallet;
-use App\Services\Blockchain\BlockchainResolver;
-use App\Services\Wallet\BalanceHistoryRecorder;
 use Illuminate\Console\Command;
-use Throwable;
 
 class CaptureWalletBalances extends Command
 {
@@ -22,29 +20,25 @@ class CaptureWalletBalances extends Command
      *
      * @var string
      */
-    protected $description = 'Salva um snapshot do saldo/valor atual de todas as wallets cadastradas';
+    protected $description = 'Despacha um job de atualizacao de saldo/valor pra cada wallet cadastrada';
 
     /**
      * Execute the console command.
+     *
+     * O trabalho pesado (chamar a blockchain, salvar o snapshot) roda no
+     * worker da fila, nao aqui - isso permite que wallets sejam
+     * processadas em paralelo e com retry automatico por wallet, em vez
+     * de um loop sequencial que desiste na primeira falha.
      */
-    public function handle(BlockchainResolver $resolver, BalanceHistoryRecorder $recorder): int
+    public function handle(): int
     {
-        $wallets = Wallet::all();
-        $captured = 0;
+        $walletIds = Wallet::pluck('id');
 
-        foreach ($wallets as $wallet) {
-            try {
-                $service = $resolver->resolve($wallet->network);
-                $balance = $service->getBalance($wallet->address);
-
-                $recorder->capture($wallet, $balance);
-                $captured++;
-            } catch (Throwable $exception) {
-                $this->error("Falha ao capturar saldo da wallet {$wallet->id}: {$exception->getMessage()}");
-            }
+        foreach ($walletIds as $walletId) {
+            RefreshWalletBalance::dispatch($walletId);
         }
 
-        $this->info("{$captured}/{$wallets->count()} wallet(s) capturadas.");
+        $this->info("{$walletIds->count()} wallet(s) enfileirada(s) para atualizacao.");
 
         return self::SUCCESS;
     }

@@ -5,19 +5,36 @@ namespace App\Services\Blockchain;
 use Illuminate\Support\Facades\Http;
 use App\Services\Blockchain\Contracts\BlockchainServiceInterface;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 class EthereumService implements BlockchainServiceInterface
 {
-		/**
-		 * Retorna o saldo de uma carteira Ethereum em ETH
-		 */
-	public function getBalance(string $address): float
+	private function cacheKey(string $address): string
 	{
-		$cacheKey = 'eth_balance:' . strtolower($address);
+		return 'eth_balance:' . strtolower($address);
+	}
+
+	public function getCachedBalance(string $address): ?float
+	{
+		return Cache::get($this->cacheKey($address));
+	}
+
+		/**
+		 * Retorna o saldo de uma carteira Ethereum em ETH. Com
+		 * $forceRefresh, ignora um cache ainda valido e busca ao vivo
+		 * mesmo assim (usado pelo botao manual de atualizar saldo).
+		 */
+	public function getBalance(string $address, bool $forceRefresh = false): float
+	{
+		$cacheKey = $this->cacheKey($address);
+
+		if ($forceRefresh) {
+			Cache::forget($cacheKey);
+		}
 
 		return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address) {
 
-			$response = Http::post(
+			$response = Http::timeout(5)->retry(2, 200, throw: false)->post(
 				config('blockchain.ethereum.rpc_url'),
 				[
 					'jsonrpc' => '2.0',
@@ -28,16 +45,22 @@ class EthereumService implements BlockchainServiceInterface
 			);
 
 			if (!$response->successful()) {
+				Log::warning('Falha ao consultar saldo Ethereum', [
+					'address' => $address,
+					'status' => $response->status(),
+				]);
 				abort(502, 'Erro ao consultar a blockchain');
 			}
 
 			$json = $response->json();
 
 			if (isset($json['error'])) {
+				Log::warning('Erro RPC Ethereum', ['address' => $address, 'error' => $json['error']]);
 				abort(502, 'Erro RPC Ethereum: ' . $json['error']['message']);
 			}
 
 			if (!isset($json['result'])) {
+				Log::warning('Resposta invalida da RPC Ethereum', ['address' => $address]);
 				abort(502, 'Resposta inválida da blockchain');
 			}
 

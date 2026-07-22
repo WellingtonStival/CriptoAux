@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Trash2, RefreshCw, History, Check, X } from "lucide-react";
+import { Pencil, Trash2, RefreshCw, History, Check, X, WifiOff } from "lucide-react";
 import { getWalletBalance, deleteWallet, renameWallet } from "../services/api";
 import { NETWORKS } from "../config/networks";
 import PriceChangeBadge from "./PriceChangeBadge";
@@ -19,6 +19,7 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   };
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState(null);
+  const [stale, setStale] = useState(false);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
@@ -39,15 +40,16 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.id]);
 
-  async function loadBalance() {
+  async function loadBalance(force = false) {
     setLoading(true);
     setError(null);
 
     try {
-      const response = await getWalletBalance(wallet.id);
+      const response = await getWalletBalance(wallet.id, force);
       const value = response.data.balance;
 
       setBalance(value);
+      setStale(Boolean(response.data.stale));
       onBalanceLoaded?.(wallet.id, value);
       localStorage.setItem(
         `wallet_balance_${wallet.id}`,
@@ -211,8 +213,19 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
         )}
 
         {balance !== null && (
-          <div className="mb-1 text-foreground">
-            Saldo: <strong>{balance}</strong> {networkConfig.symbol}
+          <div className="mb-1 flex flex-wrap items-center gap-2 text-foreground">
+            <span>
+              Saldo: <strong>{balance}</strong> {networkConfig.symbol}
+            </span>
+            {stale && (
+              <span
+                title="Não foi possível consultar a blockchain agora — mostrando o último saldo conhecido."
+                className="inline-flex items-center gap-1 text-xs text-warning"
+              >
+                <WifiOff className="size-3" />
+                Desatualizado
+              </span>
+            )}
           </div>
         )}
 
@@ -230,7 +243,7 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
         {error && <div className="mb-3 text-sm text-destructive">{error}</div>}
 
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={loadBalance} disabled={loading}>
+          <Button variant="outline" size="sm" onClick={() => loadBalance(true)} disabled={loading}>
             <RefreshCw className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
             {loading ? "Atualizando..." : "Atualizar saldo"}
           </Button>

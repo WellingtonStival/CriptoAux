@@ -53,8 +53,8 @@ export function renameWallet(walletId, name) {
   return api.patch(`/wallets/${walletId}`, { name: name || null });
 }
 
-export function getWalletBalance(walletId) {
-  return api.get(`/wallets/${walletId}/balance`);
+export function getWalletBalance(walletId, force = false) {
+  return api.get(`/wallets/${walletId}/balance`, { params: { force: force || undefined } });
 }
 
 export function getPrices() {

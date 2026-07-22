@@ -44,6 +44,33 @@ class EthereumServiceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_get_cached_balance_returns_null_on_a_cold_cache(): void
+    {
+        $balance = app(EthereumService::class)
+            ->getCachedBalance('0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045');
+
+        $this->assertNull($balance);
+    }
+
+    public function test_get_cached_balance_returns_the_value_after_a_live_fetch(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'id' => 1,
+                'result' => '0x1bc16d674ec80000', // 2 ETH em wei
+            ]),
+        ]);
+
+        $service = app(EthereumService::class);
+        $address = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045';
+
+        $service->getBalance($address);
+
+        $this->assertSame(2.0, $service->getCachedBalance($address));
+        Http::assertSentCount(1);
+    }
+
     public function test_aborts_with_502_when_the_rpc_returns_an_error(): void
     {
         Http::fake([

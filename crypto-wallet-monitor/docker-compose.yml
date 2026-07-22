@@ -13,6 +13,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
 
   scheduler:
     build:
@@ -25,6 +27,23 @@ services:
     command: sh -c "composer install && php artisan schedule:work"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  queue:
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+    container_name: crypto_queue
+    working_dir: /var/www
+    volumes:
+      - ./src:/var/www
+    command: sh -c "composer install && php artisan queue:work --tries=3 --backoff=5,15,30"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   db:
@@ -43,7 +62,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-  
+
+  redis:
+    image: redis:7-alpine
+    container_name: crypto_redis
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   frontend:
     image: node:20-alpine
     container_name: crypto_frontend
@@ -58,4 +88,4 @@ services:
 
 volumes:
   postgres_data:
-
+  redis_data:

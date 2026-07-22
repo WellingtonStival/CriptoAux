@@ -5,6 +5,7 @@ namespace App\Services\Market;
 use App\Services\Blockchain\BlockchainResolver;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class PriceService
 {
@@ -28,13 +29,14 @@ class PriceService
         return Cache::remember('coin_prices_usd', now()->addSeconds(60), function () {
             $networks = BlockchainResolver::supportedNetworks();
 
-            $response = Http::get(config('market.coingecko.base_url') . '/coins/markets', [
+            $response = Http::timeout(5)->retry(2, 200, throw: false)->get(config('market.coingecko.base_url') . '/coins/markets', [
                 'vs_currency' => 'usd',
                 'ids' => implode(',', $networks),
                 'price_change_percentage' => '24h,7d,30d',
             ]);
 
             if (!$response->successful()) {
+                Log::warning('Falha ao consultar cotacoes CoinGecko', ['status' => $response->status()]);
                 abort(502, 'Erro ao consultar cotações');
             }
 

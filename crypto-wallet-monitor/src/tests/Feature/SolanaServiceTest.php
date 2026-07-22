@@ -44,6 +44,13 @@ class SolanaServiceTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_get_cached_balance_returns_null_on_a_cold_cache(): void
+    {
+        $balance = app(SolanaService::class)->getCachedBalance(self::VALID_ADDRESS);
+
+        $this->assertNull($balance);
+    }
+
     public function test_aborts_with_502_when_the_rpc_returns_an_error(): void
     {
         Http::fake([
