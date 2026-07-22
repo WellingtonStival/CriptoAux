@@ -1,8 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { Pencil, Trash2, RefreshCw, History, Check, X } from "lucide-react";
 import { getWalletBalance, deleteWallet, renameWallet } from "../services/api";
 import { NETWORKS } from "../config/networks";
 import PriceChangeBadge from "./PriceChangeBadge";
+import { Card, CardContent } from "./ui/card";
+import { Badge } from "./ui/badge";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -94,143 +99,151 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   const valueUsd = balance !== null && price ? balance * price.usd : null;
 
   return (
-    <li className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-      <div className="mb-2 flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          {editingName ? (
-            <div className="flex flex-wrap items-center gap-1.5">
-              <input
-                type="text"
-                value={nameDraft}
-                onChange={(event) => setNameDraft(event.target.value)}
-                placeholder="Nome da carteira"
-                autoComplete="off"
-                disabled={savingName}
-                className="min-w-0 flex-1 rounded-md border border-slate-700 bg-slate-900 px-2 py-1 text-sm text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-              />
-              <button
-                onClick={handleSaveName}
-                disabled={savingName}
-                className="rounded-md bg-indigo-600 px-2 py-1 text-xs text-white hover:bg-indigo-500 disabled:opacity-60"
-              >
-                {savingName ? "Salvando..." : "Salvar"}
-              </button>
-              <button
-                onClick={() => setEditingName(false)}
-                disabled={savingName}
-                className="rounded-md border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-1.5">
-              {wallet.name ? (
-                <div className="min-w-0">
-                  <div className="truncate font-medium text-slate-50">
-                    {wallet.name}
+    <Card>
+      <CardContent className="pt-4">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {editingName ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Input
+                  type="text"
+                  value={nameDraft}
+                  onChange={(event) => setNameDraft(event.target.value)}
+                  placeholder="Nome da carteira"
+                  autoComplete="off"
+                  disabled={savingName}
+                  className="h-8 min-w-0 flex-1 text-sm"
+                />
+                <Button
+                  size="icon"
+                  onClick={handleSaveName}
+                  disabled={savingName}
+                  className="size-8"
+                >
+                  <Check className="size-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setEditingName(false)}
+                  disabled={savingName}
+                  className="size-8"
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                {wallet.name ? (
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-foreground">
+                      {wallet.name}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {wallet.address}
+                    </div>
                   </div>
-                  <div className="truncate text-xs text-slate-500">
+                ) : (
+                  <div className="break-all font-medium text-foreground">
                     {wallet.address}
                   </div>
-                </div>
-              ) : (
-                <div className="break-all font-medium text-slate-50">
-                  {wallet.address}
-                </div>
-              )}
+                )}
 
-              <button
-                onClick={handleStartEditingName}
-                title="Editar nome"
-                className="shrink-0 text-xs text-slate-500 hover:text-slate-300"
+                <button
+                  onClick={handleStartEditingName}
+                  title="Editar nome"
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="size-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {confirmingDelete ? (
+            <div className="flex shrink-0 items-center gap-1.5 text-xs">
+              <span className="text-muted-foreground">Remover?</span>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="h-7 px-2"
               >
-                ✎
-              </button>
+                {deleting ? "Removendo..." : "Sim"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deleting}
+                className="h-7 px-2"
+              >
+                Cancelar
+              </Button>
             </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setConfirmingDelete(true)}
+              title="Remover carteira"
+              className="size-8 shrink-0 text-destructive hover:bg-destructive-muted"
+            >
+              <Trash2 className="size-4" />
+            </Button>
           )}
         </div>
 
-        {confirmingDelete ? (
-          <div className="flex shrink-0 items-center gap-1.5 text-xs">
-            <span className="text-slate-400">Remover?</span>
-            <button
-              onClick={handleConfirmDelete}
-              disabled={deleting}
-              className="rounded-md bg-red-500/15 px-2 py-1 text-red-400 hover:bg-red-500/25 disabled:opacity-60"
-            >
-              {deleting ? "Removendo..." : "Sim"}
-            </button>
-            <button
-              onClick={() => setConfirmingDelete(false)}
-              disabled={deleting}
-              className="rounded-md border border-slate-700 px-2 py-1 text-slate-300 hover:bg-slate-800 disabled:opacity-60"
-            >
-              Cancelar
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setConfirmingDelete(true)}
-            title="Remover carteira"
-            className="shrink-0 rounded-md border border-slate-700 px-2 py-1 text-xs text-red-400 hover:bg-red-500/10"
+        <div className="mb-3">
+          <Badge
+            className="text-white"
+            style={{ backgroundColor: networkConfig.color }}
           >
-            Remover
-          </button>
+            {networkConfig.label}
+          </Badge>
+        </div>
+
+        {loading && balance === null && (
+          <div className="mb-3 text-sm text-muted-foreground">
+            Consultando saldo...
+          </div>
         )}
-      </div>
 
-      <div className="mb-3">
-        <span
-          className="rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-          style={{ backgroundColor: networkConfig.color }}
-        >
-          {networkConfig.label}
-        </span>
-      </div>
+        {balance !== null && (
+          <div className="mb-1 text-foreground">
+            Saldo: <strong>{balance}</strong> {networkConfig.symbol}
+          </div>
+        )}
 
-      {loading && balance === null && (
-        <div className="mb-3 text-sm text-slate-400">
-          Consultando saldo...
+        {valueUsd !== null && (
+          <div className="mb-3 flex items-center gap-2 text-sm text-muted-foreground">
+            <span>
+              ≈ $
+              {valueUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
+              USD
+            </span>
+            <PriceChangeBadge change={price.change_24h} />
+          </div>
+        )}
+
+        {error && <div className="mb-3 text-sm text-destructive">{error}</div>}
+
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={loadBalance} disabled={loading}>
+            <RefreshCw className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
+            {loading ? "Atualizando..." : "Atualizar saldo"}
+          </Button>
+
+          <Button variant="outline" size="sm" asChild>
+            <Link to={`/wallets/${wallet.id}/history`}>
+              <History className="size-3.5" />
+              Ver histórico
+            </Link>
+          </Button>
         </div>
-      )}
-
-      {balance !== null && (
-        <div className="mb-1 text-slate-200">
-          Saldo: <strong>{balance}</strong> {networkConfig.symbol}
-        </div>
-      )}
-
-      {valueUsd !== null && (
-        <div className="mb-3 flex items-center gap-2 text-sm text-slate-400">
-          <span>
-            ≈ $
-            {valueUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })}{" "}
-            USD
-          </span>
-          <PriceChangeBadge change={price.change_24h} />
-        </div>
-      )}
-
-      {error && <div className="mb-3 text-sm text-red-400">{error}</div>}
-
-      <div className="flex gap-2">
-        <button
-          onClick={loadBalance}
-          disabled={loading}
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-60"
-        >
-          {loading ? "Atualizando..." : "Atualizar saldo"}
-        </button>
-
-        <Link
-          to={`/wallets/${wallet.id}/history`}
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          Ver histórico
-        </Link>
-      </div>
-    </li>
+      </CardContent>
+    </Card>
   );
 }
 

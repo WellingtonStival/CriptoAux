@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
+import { Inbox } from "lucide-react";
 import WalletForm from "../components/WalletForm";
 import WalletList from "../components/WalletList";
 import Layout from "../components/Layout";
+import { Card, CardContent } from "../components/ui/card";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Skeleton } from "../components/ui/skeleton";
 import { getWallets, getPrices } from "../services/api";
 
 const PRICES_REFRESH_INTERVAL_MS = 60_000;
@@ -61,18 +65,33 @@ function Wallets() {
 
   return (
     <Layout>
-      <h1 className="mb-6 text-2xl font-bold text-slate-50">
+      <h1 className="mb-6 text-2xl font-bold text-foreground">
         Minhas Wallets
       </h1>
 
       <WalletForm onCreated={handleWalletCreated} />
 
-      {loading && <p className="text-slate-400">Carregando carteiras...</p>}
+      {loading && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <Skeleton key={index} className="h-40 w-full" />
+          ))}
+        </div>
+      )}
 
-      {error && <p className="text-red-400">{error}</p>}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {!loading && !error && wallets.length === 0 && (
-        <p className="text-slate-400">Nenhuma carteira cadastrada.</p>
+        <Card>
+          <CardContent className="flex flex-col items-start gap-2 pt-4">
+            <Inbox className="size-6 text-muted-foreground" />
+            <p className="text-muted-foreground">Nenhuma carteira cadastrada.</p>
+          </CardContent>
+        </Card>
       )}
 
       {!loading && !error && wallets.length > 0 && (

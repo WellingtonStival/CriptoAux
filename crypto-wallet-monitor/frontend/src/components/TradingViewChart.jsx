@@ -51,10 +51,7 @@ function TradingViewChart({ network }) {
   }, [network]);
 
   return (
-    <div
-      ref={containerRef}
-      className="overflow-hidden rounded-lg border border-slate-800"
-    />
+    <div ref={containerRef} className="overflow-hidden rounded-lg" />
   );
 }
 

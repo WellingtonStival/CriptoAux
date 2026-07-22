@@ -9,10 +9,29 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  ArrowLeft,
+  Wallet,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Gauge,
+  AlertCircle,
+  LineChart as LineChartIcon,
+  BarChart3,
+  Receipt,
+  CandlestickChart,
+} from "lucide-react";
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
+import StatCard from "../components/StatCard";
 import TradingViewChart from "../components/TradingViewChart";
 import TransactionList from "../components/TransactionList";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Skeleton } from "../components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { getWalletHistory, getPrices } from "../services/api";
 import { formatUsd, formatCompactUsd, formatDateTime } from "../utils/format";
 import { NETWORKS } from "../config/networks";
@@ -68,202 +87,221 @@ function WalletHistory() {
     label: formatDateTime(point.captured_at),
   }));
   const coinMarketData = data ? marketData?.[data.network] : null;
+  const isPositiveChange = (data?.summary.change_value_usd ?? 0) >= 0;
 
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Link to="/wallets" className="text-sm text-indigo-400 hover:underline">
-            ← Voltar
+          <Link
+            to="/wallets"
+            className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            <ArrowLeft className="size-3.5" />
+            Voltar
           </Link>
-          <h1 className="mt-1 text-2xl font-bold text-slate-50">
+          <h1 className="mt-1 text-2xl font-bold text-foreground">
             Histórico da carteira
           </h1>
         </div>
 
         {networkConfig && (
-          <span
-            className="rounded-full px-2.5 py-0.5 text-xs font-medium text-white"
-            style={{ backgroundColor: networkConfig.color }}
-          >
+          <Badge className="text-white" style={{ backgroundColor: networkConfig.color }}>
             {networkConfig.label}
-          </span>
+          </Badge>
         )}
       </div>
 
-      <div className="mb-6 flex gap-2">
-        {PERIODS.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => setPeriod(option.value)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              period === option.value
-                ? "bg-indigo-600 text-white"
-                : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={period} onValueChange={setPeriod} className="mb-6">
+        <TabsList>
+          {PERIODS.map((option) => (
+            <TabsTrigger key={option.value} value={option.value}>
+              {option.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {loading && <p className="text-slate-400">Carregando...</p>}
-      {error && <p className="text-red-400">{error}</p>}
+      {loading && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-20 w-full" />
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {!loading && !error && data && (
         <>
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <div className="text-xs text-slate-400">Saldo atual</div>
-              <div className="mt-1 text-lg font-semibold text-slate-50">
-                {data.summary.current_balance ?? "--"} {networkConfig?.symbol}
-              </div>
-            </div>
+            <StatCard
+              icon={Wallet}
+              label="Saldo atual"
+              value={`${data.summary.current_balance ?? "--"} ${networkConfig?.symbol ?? ""}`}
+            />
 
-            <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <div className="text-xs text-slate-400">Valor atual</div>
-              <div className="mt-1 text-lg font-semibold text-slate-50">
-                {formatUsd(data.summary.current_value_usd)}
-              </div>
-            </div>
+            <StatCard
+              icon={DollarSign}
+              label="Valor atual"
+              value={formatUsd(data.summary.current_value_usd)}
+            />
 
-            <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <div className="text-xs text-slate-400">Variação no período</div>
-              <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-50">
-                {formatUsd(data.summary.change_value_usd)}
-                <PriceChangeBadge change={data.summary.change_percent} />
-              </div>
-            </div>
+            <StatCard
+              icon={isPositiveChange ? TrendingUp : TrendingDown}
+              label="Variação no período"
+              value={formatUsd(data.summary.change_value_usd)}
+              extra={<PriceChangeBadge change={data.summary.change_percent} />}
+            />
 
-            <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <div className="text-xs text-slate-400">Mín. / Máx.</div>
-              <div className="mt-1 text-sm font-semibold text-slate-50">
-                {formatUsd(data.summary.min_value_usd)} /{" "}
-                {formatUsd(data.summary.max_value_usd)}
-              </div>
-            </div>
+            <StatCard
+              icon={Gauge}
+              label="Mín. / Máx."
+              value={`${formatUsd(data.summary.min_value_usd)} / ${formatUsd(data.summary.max_value_usd)}`}
+            />
           </div>
 
-          <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-            <h2 className="text-sm font-medium text-slate-300">
-              Valor da carteira ao longo do tempo
-            </h2>
-            <p className="mb-3 text-xs text-slate-500">
-              Saldo × preço da moeda em cada snapshot registrado, no período
-              selecionado acima.
-            </p>
-
-            {chartData.length < 2 ? (
-              <p className="text-slate-400">
-                Ainda não há dados suficientes nesse período para desenhar um
-                gráfico. Consulte o saldo algumas vezes ao longo do tempo
-                para acumular histórico (ou aguarde a captura automática por
-                hora).
-              </p>
-            ) : (
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis
-                    dataKey="label"
-                    stroke="#64748b"
-                    fontSize={12}
-                    tick={{ fill: "#94a3b8" }}
-                  />
-                  <YAxis
-                    stroke="#64748b"
-                    fontSize={12}
-                    tick={{ fill: "#94a3b8" }}
-                    tickFormatter={(value) => `$${value.toLocaleString()}`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#020617",
-                      border: "1px solid #1e293b",
-                      borderRadius: 8,
-                    }}
-                    labelStyle={{ color: "#f8fafc" }}
-                    formatter={(value) => [formatUsd(value), "Valor"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="value_usd"
-                    stroke="#6366f1"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <LineChartIcon className="size-4" />
+                Valor da carteira ao longo do tempo
+              </CardTitle>
+              <CardDescription>
+                Saldo × preço da moeda em cada snapshot registrado, no período
+                selecionado acima.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {chartData.length < 2 ? (
+                <p className="text-muted-foreground">
+                  Ainda não há dados suficientes nesse período para desenhar um
+                  gráfico. Consulte o saldo algumas vezes ao longo do tempo
+                  para acumular histórico (ou aguarde a captura automática por
+                  hora).
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
+                    <XAxis
+                      dataKey="label"
+                      stroke="var(--color-border)"
+                      fontSize={12}
+                      tick={{ fill: "var(--color-muted-foreground)" }}
+                    />
+                    <YAxis
+                      stroke="var(--color-border)"
+                      fontSize={12}
+                      tick={{ fill: "var(--color-muted-foreground)" }}
+                      tickFormatter={(value) => `$${value.toLocaleString()}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "var(--color-card)",
+                        border: "1px solid var(--color-border)",
+                        borderRadius: 8,
+                      }}
+                      labelStyle={{ color: "var(--color-foreground)" }}
+                      formatter={(value) => [formatUsd(value), "Valor"]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="value_usd"
+                      stroke="var(--color-primary)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
 
           {coinMarketData && (
-            <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <h2 className="mb-3 text-sm font-medium text-slate-300">
-                Dados de mercado — {networkConfig?.label}
-              </h2>
-
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="size-4" />
+                  Dados de mercado — {networkConfig?.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
-                  <div className="text-xs text-slate-400">Market cap</div>
-                  <div className="mt-1 text-slate-50">
+                  <div className="text-xs text-muted-foreground">Market cap</div>
+                  <div className="mt-1 text-foreground">
                     {formatCompactUsd(coinMarketData.market_cap)}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400">Volume 24h</div>
-                  <div className="mt-1 text-slate-50">
+                  <div className="text-xs text-muted-foreground">Volume 24h</div>
+                  <div className="mt-1 text-foreground">
                     {formatCompactUsd(coinMarketData.volume_24h)}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400">Máx. / Mín. 24h</div>
-                  <div className="mt-1 text-slate-50">
+                  <div className="text-xs text-muted-foreground">Máx. / Mín. 24h</div>
+                  <div className="mt-1 text-foreground">
                     {formatUsd(coinMarketData.high_24h)} /{" "}
                     {formatUsd(coinMarketData.low_24h)}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400">Variação 24h</div>
+                  <div className="text-xs text-muted-foreground">Variação 24h</div>
                   <div className="mt-1">
                     <PriceChangeBadge change={coinMarketData.change_24h} />
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400">Variação 7d</div>
+                  <div className="text-xs text-muted-foreground">Variação 7d</div>
                   <div className="mt-1">
                     <PriceChangeBadge change={coinMarketData.change_7d} />
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-slate-400">Variação 30d</div>
+                  <div className="text-xs text-muted-foreground">Variação 30d</div>
                   <div className="mt-1">
                     <PriceChangeBadge change={coinMarketData.change_30d} />
                   </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           )}
 
-          <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-            <h2 className="mb-3 text-sm font-medium text-slate-300">
-              Últimas transações
-            </h2>
-            <TransactionList walletId={data.wallet_id} symbol={networkConfig?.symbol} />
-          </div>
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Receipt className="size-4" />
+                Últimas transações
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TransactionList walletId={data.wallet_id} symbol={networkConfig?.symbol} />
+            </CardContent>
+          </Card>
 
           {networkConfig && (
-            <div className="mt-6">
-              <h2 className="mb-3 text-sm font-medium text-slate-300">
-                Gráfico de mercado (TradingView)
-              </h2>
-              <TradingViewChart network={data.network} />
-            </div>
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CandlestickChart className="size-4" />
+                  Gráfico de mercado (TradingView)
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TradingViewChart network={data.network} />
+              </CardContent>
+            </Card>
           )}
         </>
       )}

@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { KeyRound } from 'lucide-react';
 import { resetPassword } from '../services/api';
+import AuthLayout from '../components/AuthLayout';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 function ResetPassword() {
   const [searchParams] = useSearchParams();
@@ -42,65 +47,53 @@ function ResetPassword() {
 
   if (!token || !email) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
-        <div className="w-full max-w-sm rounded-lg border border-slate-800 bg-slate-950 p-8">
-          <h2 className="mb-4 text-xl font-bold text-slate-50">
-            Link inválido
-          </h2>
-          <p className="text-sm text-slate-400">
-            Este link de redefinição de senha está incompleto. Solicite um
-            novo link.
-          </p>
-          <p className="mt-4 text-sm text-slate-400">
-            <Link to="/esqueci-senha" className="text-indigo-400 hover:underline">
-              Solicitar novo link
-            </Link>
-          </p>
-        </div>
-      </div>
+      <AuthLayout title="Link inválido">
+        <p className="text-sm text-muted-foreground">
+          Este link de redefinição de senha está incompleto. Solicite um
+          novo link.
+        </p>
+        <p className="mt-4 text-sm text-muted-foreground">
+          <Link to="/esqueci-senha" className="text-primary hover:underline">
+            Solicitar novo link
+          </Link>
+        </p>
+      </AuthLayout>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-800 bg-slate-950 p-8">
-        <h2 className="mb-6 text-xl font-bold text-slate-50">
-          Redefinir senha
-        </h2>
+    <AuthLayout title="Redefinir senha">
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <Input
+          type="password"
+          placeholder="Nova senha"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          required
+          disabled={saving}
+        />
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="password"
-            placeholder="Nova senha"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            required
-            disabled={saving}
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
+        <Input
+          type="password"
+          placeholder="Confirmar nova senha"
+          value={passwordConfirmation}
+          onChange={e => setPasswordConfirmation(e.target.value)}
+          required
+          disabled={saving}
+        />
 
-          <input
-            type="password"
-            placeholder="Confirmar nova senha"
-            value={passwordConfirmation}
-            onChange={e => setPasswordConfirmation(e.target.value)}
-            required
-            disabled={saving}
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
-
-          <button
-            type="submit"
-            disabled={saving}
-            className="mt-2 rounded-md bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
-          >
-            {saving ? 'Salvando...' : 'Redefinir senha'}
-          </button>
-        </form>
-      </div>
-    </div>
+        <Button type="submit" disabled={saving} className="mt-2">
+          <KeyRound className="size-4" />
+          {saving ? 'Salvando...' : 'Redefinir senha'}
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }
 

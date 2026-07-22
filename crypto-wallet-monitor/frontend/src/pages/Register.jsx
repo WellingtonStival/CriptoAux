@@ -1,7 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { UserPlus } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../components/AuthLayout';
+import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 function Register() {
   const [name, setName] = useState('');
@@ -48,70 +53,63 @@ function Register() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-900 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-800 bg-slate-950 p-8">
-        <h2 className="mb-6 text-xl font-bold text-slate-50">Criar conta</h2>
+    <AuthLayout title="Criar conta">
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <Input
+          type="text"
+          placeholder="Nome"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          disabled={saving}
+          required
+        />
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="text"
-            placeholder="Nome"
-            value={name}
-            onChange={e => setName(e.target.value)}
-            disabled={saving}
-            required
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
+        <Input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          disabled={saving}
+          required
+        />
 
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            disabled={saving}
-            required
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
+        <Input
+          type="password"
+          placeholder="Senha"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          disabled={saving}
+          required
+        />
 
-          <input
-            type="password"
-            placeholder="Senha"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            disabled={saving}
-            required
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
+        <Input
+          type="password"
+          placeholder="Confirmar senha"
+          value={passwordConfirmation}
+          onChange={e => setPasswordConfirmation(e.target.value)}
+          disabled={saving}
+          required
+        />
 
-          <input
-            type="password"
-            placeholder="Confirmar senha"
-            value={passwordConfirmation}
-            onChange={e => setPasswordConfirmation(e.target.value)}
-            disabled={saving}
-            required
-            className="rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
+        <Button type="submit" disabled={saving} className="mt-2">
+          <UserPlus className="size-4" />
+          {saving ? 'Criando conta...' : 'Criar conta'}
+        </Button>
+      </form>
 
-          <button
-            type="submit"
-            disabled={saving}
-            className="mt-2 rounded-md bg-indigo-600 px-3 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
-          >
-            {saving ? 'Criando conta...' : 'Criar conta'}
-          </button>
-        </form>
-
-        <p className="mt-4 text-sm text-slate-400">
-          Já tem conta?{' '}
-          <Link to="/login" className="text-indigo-400 hover:underline">
-            Entrar
-          </Link>
-        </p>
-      </div>
-    </div>
+      <p className="mt-4 text-sm text-muted-foreground">
+        Já tem conta?{' '}
+        <Link to="/login" className="text-primary hover:underline">
+          Entrar
+        </Link>
+      </p>
+    </AuthLayout>
   );
 }
 

@@ -1,5 +1,12 @@
 import { useState } from "react";
+import { ShieldAlert, Plus } from "lucide-react";
 import { createWallet } from "../services/api";
+import { Card, CardContent } from "./ui/card";
+import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Select } from "./ui/select";
+import { Button } from "./ui/button";
+import { Alert, AlertDescription } from "./ui/alert";
 
 const ADDRESS_PATTERNS = {
   ethereum: /^0x[a-fA-F0-9]{40}$/,
@@ -56,89 +63,74 @@ function WalletForm({ onCreated }) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4"
-    >
-      <div className="flex gap-2">
-        <div className="w-36 shrink-0">
-          <label
-            htmlFor="wallet-network"
-            className="mb-1.5 block text-sm text-slate-300"
-          >
-            Blockchain
-          </label>
+    <Card className="mb-6">
+      <CardContent className="pt-4">
+        <form onSubmit={handleSubmit}>
+          <div className="flex gap-2">
+            <div className="w-36 shrink-0">
+              <Label htmlFor="wallet-network">Blockchain</Label>
 
-          <select
-            id="wallet-network"
-            value={network}
-            onChange={(event) => setNetwork(event.target.value)}
-            disabled={saving}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          >
-            {NETWORK_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
+              <Select
+                id="wallet-network"
+                value={network}
+                onChange={(event) => setNetwork(event.target.value)}
+                disabled={saving}
+              >
+                {NETWORK_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
 
-        <div className="flex-1">
-          <label
-            htmlFor="wallet-address"
-            className="mb-1.5 block text-sm text-slate-300"
-          >
-            Endereço
-          </label>
+            <div className="flex-1">
+              <Label htmlFor="wallet-address">Endereço</Label>
 
-          <input
-            id="wallet-address"
-            type="text"
-            value={address}
-            onChange={(event) => setAddress(event.target.value)}
-            placeholder={ADDRESS_PLACEHOLDERS[network]}
-            autoComplete="off"
-            disabled={saving}
-            className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-          />
-        </div>
-      </div>
+              <Input
+                id="wallet-address"
+                type="text"
+                value={address}
+                onChange={(event) => setAddress(event.target.value)}
+                placeholder={ADDRESS_PLACEHOLDERS[network]}
+                autoComplete="off"
+                disabled={saving}
+              />
+            </div>
+          </div>
 
-      <div className="mt-3">
-        <label
-          htmlFor="wallet-name"
-          className="mb-1.5 block text-sm text-slate-300"
-        >
-          Nome (opcional)
-        </label>
+          <div className="mt-3">
+            <Label htmlFor="wallet-name">Nome (opcional)</Label>
 
-        <input
-          id="wallet-name"
-          type="text"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="Ex: Carteira do Trezor"
-          autoComplete="off"
-          disabled={saving}
-          className="w-full rounded-md border border-slate-700 bg-slate-900 px-3 py-2 text-slate-50 placeholder:text-slate-500 focus:border-slate-500 focus:outline-none disabled:opacity-60"
-        />
-      </div>
+            <Input
+              id="wallet-name"
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Ex: Carteira do Trezor"
+              autoComplete="off"
+              disabled={saving}
+            />
+          </div>
 
-      <button
-        type="submit"
-        disabled={saving}
-        className="mt-3 rounded-md bg-indigo-600 px-4 py-2 font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
-      >
-        {saving ? "Cadastrando..." : "Cadastrar carteira"}
-      </button>
+          <Button type="submit" disabled={saving} className="mt-3">
+            <Plus className="size-4" />
+            {saving ? "Cadastrando..." : "Cadastrar carteira"}
+          </Button>
 
-      <p className="mt-2 text-xs text-slate-400">
-        Use somente um endereço público. Nunca informe sua chave privada.
-      </p>
+          <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ShieldAlert className="size-3.5 shrink-0" />
+            Use somente um endereço público. Nunca informe sua chave privada.
+          </p>
 
-      {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
-    </form>
+          {error && (
+            <Alert variant="destructive" className="mt-3">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

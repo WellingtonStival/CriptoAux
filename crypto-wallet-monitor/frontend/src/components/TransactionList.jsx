@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, ExternalLink } from "lucide-react";
 import { getWalletTransactions } from "../services/api";
 import { formatDateTime } from "../utils/format";
 import { NETWORKS } from "../config/networks";
+import { Skeleton } from "./ui/skeleton";
+import { Alert, AlertDescription } from "./ui/alert";
 
 function TransactionList({ walletId, symbol }) {
   const [loading, setLoading] = useState(true);
@@ -32,16 +35,26 @@ function TransactionList({ walletId, symbol }) {
   }, [walletId]);
 
   if (loading) {
-    return <p className="text-slate-400">Carregando transações...</p>;
+    return (
+      <div className="flex flex-col gap-2">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <Skeleton key={index} className="h-10 w-full" />
+        ))}
+      </div>
+    );
   }
 
   if (error) {
-    return <p className="text-red-400">{error}</p>;
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
   }
 
   if (!data?.supported) {
     return (
-      <p className="text-slate-400">
+      <p className="text-muted-foreground">
         Histórico de transações ainda não disponível para{" "}
         {NETWORKS[data?.network]?.label ?? data?.network}.
       </p>
@@ -49,42 +62,52 @@ function TransactionList({ walletId, symbol }) {
   }
 
   if (data.transactions.length === 0) {
-    return <p className="text-slate-400">Nenhuma transação encontrada.</p>;
+    return <p className="text-muted-foreground">Nenhuma transação encontrada.</p>;
   }
 
   return (
     <ul className="flex flex-col gap-2">
-      {data.transactions.map((tx) => (
-        <li
-          key={tx.hash}
-          className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 px-3 py-2 text-sm"
-        >
-          <span
-            className={
-              tx.direction === "in"
-                ? "font-medium text-emerald-400"
-                : "font-medium text-red-400"
-            }
+      {data.transactions.map((tx) => {
+        const isIncoming = tx.direction === "in";
+
+        return (
+          <li
+            key={tx.hash}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
           >
-            {tx.direction === "in" ? "↓ Recebido" : "↑ Enviado"}
-          </span>
+            <span
+              className={
+                isIncoming
+                  ? "flex items-center gap-1 font-medium text-success"
+                  : "flex items-center gap-1 font-medium text-destructive"
+              }
+            >
+              {isIncoming ? (
+                <ArrowDownLeft className="size-3.5" />
+              ) : (
+                <ArrowUpRight className="size-3.5" />
+              )}
+              {isIncoming ? "Recebido" : "Enviado"}
+            </span>
 
-          <span className="text-slate-200">
-            {tx.amount} {symbol}
-          </span>
+            <span className="text-foreground">
+              {tx.amount} {symbol}
+            </span>
 
-          <span className="text-slate-500">{formatDateTime(tx.timestamp)}</span>
+            <span className="text-muted-foreground">{formatDateTime(tx.timestamp)}</span>
 
-          <a
-            href={tx.explorer_url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-indigo-400 hover:underline"
-          >
-            Ver
-          </a>
-        </li>
-      ))}
+            <a
+              href={tx.explorer_url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              Ver
+              <ExternalLink className="size-3.5" />
+            </a>
+          </li>
+        );
+      })}
     </ul>
   );
 }
