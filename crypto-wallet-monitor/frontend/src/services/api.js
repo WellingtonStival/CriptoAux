@@ -77,6 +77,10 @@ export function getPortfolioHistory(period) {
   return api.get('/portfolio/history', { params: { period } });
 }
 
+export function getNews(network) {
+  return api.get('/news', { params: { network: network || undefined } });
+}
+
 /* =========================
    SENHA
 ========================= */

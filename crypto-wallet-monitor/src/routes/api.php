@@ -9,6 +9,7 @@ use App\Http\Controllers\WalletHistoryController;
 use App\Http\Controllers\WalletTransactionController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\PriceController;
+use App\Http\Controllers\NewsController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -22,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
     Route::get('/prices', [PriceController::class, 'index']);
     Route::get('/portfolio/history', [PortfolioController::class, 'history']);
+    Route::get('/news', [NewsController::class, 'index']);
 });
 
 Route::middleware('auth:sanctum')->get(

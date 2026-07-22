@@ -25,6 +25,9 @@ function Layout({ children }) {
             <Link to="/wallets" className="text-slate-300 hover:text-slate-50">
               Minhas Wallets
             </Link>
+            <Link to="/noticias" className="text-slate-300 hover:text-slate-50">
+              Notícias
+            </Link>
           </nav>
         </div>
 
