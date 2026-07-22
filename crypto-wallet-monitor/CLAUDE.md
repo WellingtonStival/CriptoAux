@@ -127,8 +127,12 @@ removido e consolidado aqui no commit `7776fa9`. Não recrie essa duplicação.
 docker compose up
 ```
 Sobe backend em `localhost:8000`, frontend em `localhost:5173`, Postgres em
-`localhost:5432`. O comando do container `app` já roda `composer install`
-automaticamente.
+`localhost:5432`, Redis em `localhost:6379` (container `redis`, sem porta
+exposta pro host — só a rede interna do Compose usa). O comando do
+container `app` já roda `composer install` automaticamente. Serviços
+`scheduler` (captura de saldo agendada) e `queue` (worker da fila —
+processa `RefreshWalletBalance`) precisam estar rodando pro sistema
+funcionar por completo; `docker compose up` já sobe os dois.
 
 **Cuidado (Windows + Docker)**: bind mounts no Windows não disparam eventos
 nativos de filesystem, então o Vite não detecta mudanças em arquivo por
@@ -137,7 +141,47 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (89 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (101 testes, `php artisan test`)
+- **Confiabilidade (Fase A, 2026-07-22)**: todas as chamadas HTTP externas
+  (RPC Ethereum/Solana, API Bitcoin da Blockstream, CoinGecko) usam
+  `Http::timeout(5)->retry(2, 200, throw: false)` — 3 tentativas com
+  200ms de intervalo antes de desistir. `throw: false` é necessário
+  porque o `retry()` do Laravel por padrão lança `RequestException`
+  quando esgota as tentativas, o que pulava o tratamento `abort(502)`
+  já existente (gotcha descoberto rodando os testes). Falhas geram
+  `Log::warning()` com contexto (endereço, status) antes do abort.
+  `WalletBalanceController::show()` agora tenta o saldo ao vivo e, se
+  falhar, cai pro último saldo salvo em `wallet_balance_histories` em
+  vez de retornar 502 — resposta inclui `stale: true/false` (frontend
+  mostra um aviso "Desatualizado" em `WalletItem` quando `true`). Só
+  retorna 502 se não houver nenhum saldo salvo pra cair de volta.
+- **Redis + fila + captura assíncrona (Fase B, 2026-07-22)**: `CACHE_STORE`
+  e `QUEUE_CONNECTION` agora são `redis` (antes `database`).
+  `REDIS_CLIENT=predis` (pacote Composer puro PHP, não a extensão
+  `phpredis` — evita mexer no `Dockerfile`/rebuild de imagem). Serviços
+  novos no `docker-compose.yml`: `redis` (imagem `redis:7-alpine`, com
+  volume) e `queue` (mesma imagem do `app`, rodando `php artisan
+  queue:work --tries=3 --backoff=5,15,30`).
+  `GET /wallets/{id}/balance` **nunca mais trava esperando a
+  blockchain**, exceto na primeiríssima consulta de uma wallet sem
+  histórico algum: `BlockchainServiceInterface` ganhou
+  `getCachedBalance()` (só lê o cache, nunca chama a rede); o controller
+  usa ele primeiro — cache quente responde na hora, cache frio com
+  histórico existente despacha `App\Jobs\RefreshWalletBalance` (fila,
+  retry com backoff) e responde na hora com `stale: true` usando o
+  último saldo salvo (mesmo mecanismo de fallback da Fase A, reaproveitado
+  como caminho padrão em vez de só uma rede de segurança). O botão manual
+  "Atualizar saldo" manda `?force=true`, que ignora o cache e busca ao
+  vivo de propósito — `getBalance(address, forceRefresh: true)` agora
+  aceita esse parâmetro e dá `Cache::forget()` antes do `remember()`
+  (sem isso, o `Cache::remember` simplesmente devolvia o valor
+  cacheado antigo mesmo com "force" — bug pego pelos testes antes de ir
+  pro ar). `wallets:capture-balances` (comando agendado de hora em hora)
+  não faz mais o trabalho pesado inline — só despacha um job por wallet,
+  processado em paralelo pelo worker com retry isolado por wallet.
+  ⚠️ **Gotcha de debug** (não é bug, só anotação): o Redis do Laravel usa
+  o banco lógico **1** pra cache por padrão (banco 0 é usado por fila/
+  sessão) — `redis-cli` sem `-n 1` não mostra as chaves de cache.
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -376,6 +420,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   não é branding nosso. Se algum dia quisermos um gráfico 100% no nosso
   tema/sem dependência externa, a alternativa é `lightweight-charts` (lib
   open-source do próprio TradingView) + dados de candle da CoinGecko.
+- Desde a Fase B de confiabilidade (2026-07-22), o sistema depende de
+  mais dois containers sempre rodando: `redis` e `queue` (worker da
+  fila). Se o `queue` cair, saldos com cache frio continuam respondendo
+  (fallback pro histórico), mas nunca mais se atualizam sozinhos — vale
+  ficar de olho nisso quando for pensar em observabilidade (Fase C).
 
 ## Roadmap (por fases, prioridade nessa ordem)
 
@@ -396,6 +445,33 @@ de saldo), tela separada com indicadores e gráfico por período
 produção/deploy agora. Prioridade é **deixar o sistema "redondo"
 funcionalmente primeiro** — a Fase 2 (infra) abaixo foi empurrada pra
 depois da Fase 3.
+
+**Atualização da decisão acima (Wellington, 2026-07-22)**: prioridade
+invertida — antes de ganhar novas funcionalidades, o sistema precisa ser
+extremamente confiável (o usuário precisa confiar no sistema). Isso **não**
+é a mesma coisa que a "Fase 3 — Infra de produção" abaixo (aquela é
+deploy/produção: nginx, HTTPS, CI/CD, hospedagem). É confiabilidade do
+código que já existe: cache/filas, retry automático, tratamento de
+indisponibilidade de API, logs estruturados, observabilidade. Combinado
+faseamento (não fazer tudo de uma vez, pré-lançamento com 1 usuário real
+seria over-engineering):
+- **Fase A** (baixo esforço): retry+timeout nas chamadas HTTP externas,
+  fallback pro último saldo salvo em vez de erro quando a blockchain
+  falha, logs estruturados nos pontos de falha. ✅ concluída (ver Fase
+  2.6 abaixo).
+- **Fase B** (esforço médio): Redis (cache + fila), mover consulta de
+  saldo pra job assíncrono em vez de síncrona na requisição. ✅ concluída
+  (ver Fase 2.7 abaixo).
+- **Fase C** (perto do lançamento): observabilidade completa (Sentry já
+  previsto na Fase 4), rate limit interno por usuário. Ainda não
+  iniciada, intencionalmente adiada.
+
+Combinado também: "insights" (transformar dado em frases tipo "sua
+carteira está 74% concentrada em Ethereum") pode rodar em paralelo à
+Fase B, já que boa parte do dado necessário já existe (concentração,
+variação percentual). E monetização (planos Free/Pro/Business): desenhar
+schema leve agora (ex: coluna `plan` em `users`), sem construir cobrança
+de verdade ainda.
 
 **Fase 1.8 — Auto-atualização + excluir wallet pela UI** ✅ concluída:
 saldo/preço atualizam sozinhos (60s), botão de remover com confirmação
@@ -433,11 +509,21 @@ concluída: componentes shadcn/ui-style, tokens de tema, ícones
 lucide-react, e todas as telas (autenticadas e públicas) já usam o novo
 visual. Ver detalhes na seção Frontend acima.
 
+**Fase 2.6 — Confiabilidade, Fase A (retry/fallback/logs)** ✅ concluída:
+ver detalhes na seção Backend acima.
+
+**Fase 2.7 — Confiabilidade, Fase B (Redis + fila + captura assíncrona)**
+✅ concluída: ver detalhes na seção Backend acima. Fase C (observabilidade
+completa, rate limit) ainda não iniciada — ver nota de prioridade de
+2026-07-22 mais acima neste arquivo.
+
 **Fase 2 — Completar funcionalidades** (atual)
-Ideias já levantadas: feed de transações do Ethereum (via Etherscan, pede
-chave de API) → Kaspa (blockchain adicional) → alertas de
-variação/movimentação. Perguntar ao Wellington a prioridade dentro desta
-lista antes de escolher a próxima.
+Fases A e B de confiabilidade concluídas (2026-07-22). Próximos
+candidatos, combinados com o Wellington: Insights v1 (frases a partir de
+métricas que já existem, ex: concentração/variação) → feed de transações
+do Ethereum (via Etherscan, pede chave de API) → Kaspa (blockchain
+adicional) → alertas de variação/movimentação. Perguntar ao Wellington a
+prioridade antes de escolher a próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)
