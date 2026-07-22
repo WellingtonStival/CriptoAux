@@ -133,7 +133,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (73 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (89 testes, `php artisan test`)
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
@@ -217,6 +217,48 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   Feito em PHP/Collections (não SQL bruto) para ficar simples de
   ler/testar — se o volume de dados crescer muito (milhares de usuários),
   isso é candidato a virar uma agregação no banco ou cache.
+  Também retorna `concentration` (por rede e por wallet): índice
+  Herfindahl-Hirschman (HHI, 0-10000) + nível (`diversificado` <1500,
+  `moderado` 1500-2500, `concentrado` >2500) + maior posição. Chamado de
+  "concentração", não "risco" — é um fato objetivo sobre a distribuição
+  do patrimônio, não uma recomendação de investimento (o produto não dá
+  conselho financeiro).
+- **Notícias**: `App\Services\News\NewsService` agrega **RSS** de 3 fontes
+  conhecidas (CoinDesk, Cointelegraph, Decrypt) — **não** usa a API da
+  CryptoPanic (o plano gratuito deles foi descontinuado em 2026-07-22,
+  antes de chegarmos a configurar; o mais barato ficou em US$50/semana,
+  desproporcional pro estágio atual do projeto). RSS não precisa de chave
+  nem conta — padrão web estável, sem risco de "free tier" ser cortado.
+  Como RSS não tem marcação nativa por moeda, cada notícia é marcada por
+  uma heurística simples (contém "bitcoin"/"btc" no título+resumo? etc.)
+  — não é 100% precisa, uma notícia pode ficar sem marcação ou com mais
+  de uma. `GET /api/news?network=...` (network opcional; 422 se a rede
+  não for suportada). Uma fonte RSS fora do ar não derruba as outras (só
+  é ignorada silenciosamente).
+  **Cache global** (`crypto_news:all`, 10 min, sempre busca as 3 fontes
+  juntas e filtra em memória por rede) — não é por-usuário, porque
+  notícia é o mesmo conteúdo pra todo mundo. Isso desacopla o número de
+  requisições aos feeds da quantidade de usuários do sistema — ponto
+  chave pra "escalável". Cada item já traz `summary` (resumo/descrição
+  do RSS, sem tags HTML).
+- **Tradução de notícias**: `App\Services\Translation\TranslationService`
+  traduz título + resumo de todas as notícias pra PT-BR **numa única
+  chamada** à API da DeepL (não uma por notícia), disparada dentro do
+  mesmo ciclo de cache do `NewsService` (a cada 10 min, não por
+  requisição). Corpo da requisição é montado manualmente com `text=`
+  repetido (em vez de deixar o cliente HTTP serializar o array como
+  `text[0]=`), porque não há garantia de que a DeepL reconheça a notação
+  com colchetes do PHP. **Sem `DEEPL_API_KEY` configurada, ou se a
+  chamada falhar por qualquer motivo, retorna os textos originais em
+  inglês sem quebrar a tela** — degrada graciosamente.
+  **Gotcha da DeepL**: autenticação via `auth_key` no corpo da requisição
+  foi descontinuada em nov/2025 — a API responde 403 "Legacy
+  authentication method 'form body' is no longer supported". É
+  obrigatório enviar a chave no header `Authorization: DeepL-Auth-Key
+  {chave}` (já implementado). ✅ **Verificado funcionando de ponta a
+  ponta em 2026-07-22**: `DEEPL_API_KEY` configurada no `.env` local,
+  `/api/news` retorna título e resumo já traduzidos pra PT-BR, conferido
+  também na tela `/noticias` no navegador.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -261,8 +303,18 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   `GET /api/portfolio/history`. Também mostra o `PricesPanel` (cotações
   gerais). `Wallets.jsx` deixou de ser a tela inicial — virou `/wallets`,
   tela de **gerenciamento** (cadastrar/renomear/remover), sem os
-  indicadores agregados (esses ficaram só no Dashboard). `Layout.jsx`
-  ganhou navegação entre as duas ("Dashboard" / "Minhas Wallets").
+  indicadores agregados (esses ficaram só no Dashboard). Também mostra o
+  card "Concentração" (por moeda e por wallet, com nível colorido).
+  `Layout.jsx` ganhou navegação entre as telas ("Dashboard" / "Minhas
+  Wallets" / "Notícias").
+- **Notícias** (`News.jsx`, `/noticias`): filtro por moeda (Todas/
+  Ethereum/Solana/Bitcoin), lista de notícias com resumo (o que o próprio
+  RSS já fornece, nunca o artigo completo) e link pra fonte original.
+  Badge de moeda usa `item.currencies` (chaves de rede: `ethereum`,
+  `bitcoin`, `solana` — não tickers como `ETH`/`BTC`) pra buscar cor/
+  símbolo em `NETWORKS`. Funcional com dados reais (RSS, sem chave
+  necessária) — testado ponta a ponta em 2026-07-22. Título/resumo já
+  aparecem traduzidos em PT-BR (DeepL configurada, ver backend acima).
 - **Lista de transações** (`TransactionList.jsx`, dentro da tela de
   histórico): mostra as últimas transações da wallet (direção, valor,
   data, link pro explorer). Para Ethereum, mostra aviso de "ainda não
@@ -335,6 +387,17 @@ envio real de email via Resend (testado ponta a ponta)
 **Fase 2.2 — Dashboard consolidado de patrimônio** ✅ concluída: virou a
 tela inicial, com evolução agregada de todas as wallets e distribuição
 por moeda. `Wallets.jsx` passou a ser a tela de gerenciamento (`/wallets`)
+
+**Fase 2.3 — Concentração de patrimônio** ✅ concluída: índice HHI por
+rede e por wallet, com nível (diversificado/moderado/concentrado) e
+maior posição, no Dashboard
+
+**Fase 2.4 — Notícias por moeda + resumo + tradução** ✅ concluída:
+agregação de RSS (CoinDesk, Cointelegraph, Decrypt), sem chave de API
+(CryptoPanic descontinuou o plano gratuito antes de configurarmos —
+pivotamos pra RSS), resumo de cada notícia, tradução pra PT-BR via DeepL
+(numa única chamada por ciclo de cache, autenticação por header). Testado
+ponta a ponta com chave real em 2026-07-22.
 
 **Fase 2 — Completar funcionalidades** (atual)
 Ideias já levantadas: feed de transações do Ethereum (via Etherscan, pede
