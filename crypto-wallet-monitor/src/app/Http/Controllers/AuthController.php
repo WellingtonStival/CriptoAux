@@ -11,9 +11,11 @@ class AuthController extends Controller
 {
     public function register(Request $request)
     {
+        $emailRule = 'email:rfc' . (config('registration.validate_email_dns') ? ',dns' : '');
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email',
+            'email' => ['required', 'string', $emailRule, 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', Password::min(8)->letters()->numbers()],
         ]);
 
@@ -23,11 +25,10 @@ class AuthController extends Controller
             'password' => Hash::make($validated['password']),
         ]);
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $user->sendEmailVerificationNotification();
 
         return response()->json([
-            'user' => $user,
-            'token' => $token,
+            'message' => 'Cadastro realizado. Confirme seu email para poder entrar.',
         ], 201);
     }
 
@@ -44,6 +45,12 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'Credenciais inválidas'
             ], 401);
+        }
+
+        if (!$user->hasVerifiedEmail()) {
+            return response()->json([
+                'message' => 'Confirme seu email antes de entrar.',
+            ], 403);
         }
 
         $token = $user->createToken('api-token')->plainTextToken;

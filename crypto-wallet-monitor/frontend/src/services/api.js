@@ -93,4 +93,16 @@ export function resetPassword({ token, email, password }) {
   return api.post('/reset-password', { token, email, password });
 }
 
+/* =========================
+   VERIFICAÇÃO DE EMAIL
+========================= */
+
+export function verifyEmail({ token, email }) {
+  return api.post('/email/verify', { token, email });
+}
+
+export function resendVerification(email) {
+  return api.post('/email/resend', { email });
+}
+
 export default api;

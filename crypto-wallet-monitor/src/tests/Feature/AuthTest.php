@@ -18,10 +18,30 @@ class AuthTest extends TestCase
             'password' => 'password123',
         ]);
 
-        $response->assertStatus(201)
-            ->assertJsonStructure(['user' => ['id', 'name', 'email'], 'token']);
+        $response->assertStatus(201)->assertJsonStructure(['message']);
 
-        $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
+        // nao loga automaticamente - precisa confirmar o email antes
+        $response->assertJsonMissing(['token']);
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'test@example.com',
+            'email_verified_at' => null,
+        ]);
+    }
+
+    public function test_register_rejects_an_email_domain_with_no_dns_record(): void
+    {
+        config(['registration.validate_email_dns' => true]);
+
+        $response = $this->postJson('/api/register', [
+            'name' => 'Test User',
+            // .invalid e reservado pela IANA especificamente para nunca
+            // resolver de verdade (RFC 2606) - garantido nao ter DNS.
+            'email' => 'test@nao-existe-de-verdade.invalid',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(422)->assertJsonValidationErrors('email');
     }
 
     public function test_register_requires_a_unique_email(): void
@@ -106,5 +126,20 @@ class AuthTest extends TestCase
         ]);
 
         $response->assertStatus(401);
+    }
+
+    public function test_login_fails_when_email_is_not_verified(): void
+    {
+        User::factory()->unverified()->create([
+            'email' => 'naoconfirmado@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response = $this->postJson('/api/login', [
+            'email' => 'naoconfirmado@example.com',
+            'password' => 'password123',
+        ]);
+
+        $response->assertStatus(403);
     }
 }

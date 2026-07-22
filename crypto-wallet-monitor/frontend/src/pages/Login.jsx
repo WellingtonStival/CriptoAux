@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { LogIn } from 'lucide-react';
-import api from '../services/api';
+import { LogIn, Send } from 'lucide-react';
+import api, { resendVerification } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 import { Input } from '../components/ui/input';
@@ -12,12 +12,16 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resendState, setResendState] = useState('idle'); // idle | sending | sent
   const { login } = useAuth();
   const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError('');
+    setNeedsVerification(false);
+    setResendState('idle');
 
     try {
       const response = await api.post('/login', {
@@ -29,8 +33,24 @@ function Login() {
 
       // navega para a home protegida sem recarregar a página
       navigate('/');
+    } catch (err) {
+      if (err.response?.status === 403) {
+        setNeedsVerification(true);
+        setError(err.response.data?.message ?? 'Confirme seu email antes de entrar.');
+      } else {
+        setError('Login inválido');
+      }
+    }
+  }
+
+  async function handleResend() {
+    setResendState('sending');
+
+    try {
+      await resendVerification(email);
+      setResendState('sent');
     } catch {
-      setError('Login inválido');
+      setResendState('idle');
     }
   }
 
@@ -38,7 +58,29 @@ function Login() {
     <AuthLayout title="Login">
       {error && (
         <Alert variant="destructive" className="mb-4">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {error}
+            {needsVerification && (
+              <div className="mt-2">
+                {resendState === 'sent' ? (
+                  <span className="text-foreground">
+                    Se o email estiver cadastrado, reenviamos o link de confirmação.
+                  </span>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResend}
+                    disabled={resendState === 'sending'}
+                  >
+                    <Send className="size-3.5" />
+                    {resendState === 'sending' ? 'Enviando...' : 'Reenviar email de confirmação'}
+                  </Button>
+                )}
+              </div>
+            )}
+          </AlertDescription>
         </Alert>
       )}
 

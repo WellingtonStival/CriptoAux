@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\EmailVerificationController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\WalletController;
 use App\Http\Controllers\WalletBalanceController;
@@ -15,6 +16,9 @@ Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/forgot-password', [PasswordResetController::class, 'sendResetLink']);
 Route::post('/reset-password', [PasswordResetController::class, 'reset']);
+Route::post('/email/verify', [EmailVerificationController::class, 'verify']);
+Route::post('/email/resend', [EmailVerificationController::class, 'resend'])
+    ->middleware('throttle:3,10');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/wallets', [WalletController::class, 'index']);

@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { UserPlus } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { UserPlus, MailCheck } from 'lucide-react';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
 import AuthLayout from '../components/AuthLayout';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -15,8 +14,7 @@ function Register() {
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [registered, setRegistered] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -30,16 +28,13 @@ function Register() {
     setSaving(true);
 
     try {
-      const response = await api.post('/register', {
+      await api.post('/register', {
         name,
         email,
         password,
       });
 
-      login(response.data.token);
-
-      // navega para a home protegida sem recarregar a página
-      navigate('/');
+      setRegistered(true);
     } catch (err) {
       const validationErrors = err.response?.data?.errors;
       const firstError = validationErrors
@@ -50,6 +45,27 @@ function Register() {
     } finally {
       setSaving(false);
     }
+  }
+
+  if (registered) {
+    return (
+      <AuthLayout title="Confirme seu email">
+        <div className="flex flex-col items-start gap-3">
+          <MailCheck className="size-6 text-primary" />
+          <p className="text-sm text-muted-foreground">
+            Cadastro realizado! Enviamos um link de confirmação para{' '}
+            <span className="text-foreground">{email}</span>. Clique nele
+            para poder entrar na sua conta.
+          </p>
+        </div>
+
+        <p className="mt-4 text-sm text-muted-foreground">
+          <Link to="/login" className="text-primary hover:underline">
+            ← Voltar para o login
+          </Link>
+        </p>
+      </AuthLayout>
+    );
   }
 
   return (
