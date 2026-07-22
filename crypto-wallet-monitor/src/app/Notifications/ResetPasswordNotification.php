@@ -19,7 +19,7 @@ class ResetPasswordNotification extends Notification
     public function toMail($notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('Redefinição de senha - Crypto Wallet Monitor')
+            ->subject('Redefinição de senha - Nexfolio')
             ->line('Você solicitou a redefinição da sua senha.')
             ->action('Redefinir senha', $this->url)
             ->line('Se você não solicitou isso, pode ignorar este email — sua senha continua a mesma.')
