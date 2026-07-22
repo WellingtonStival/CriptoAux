@@ -141,7 +141,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (101 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (113 testes, `php artisan test`)
+  ⚠️ `PortfolioControllerTest` tem 2 casos sensíveis a horário de
+  execução (bucket por hora) que falham dependendo de quando os testes
+  rodam — pré-existente, não relacionado a nenhuma mudança recente,
+  ainda não investigado a fundo.
 - **Confiabilidade (Fase A, 2026-07-22)**: todas as chamadas HTTP externas
   (RPC Ethereum/Solana, API Bitcoin da Blockstream, CoinGecko) usam
   `Http::timeout(5)->retry(2, 200, throw: false)` — 3 tentativas com
@@ -185,6 +189,36 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 - `POST /api/register` (senha: mínimo 8 caracteres, letras e números via
   `Illuminate\Validation\Rules\Password`), `POST /api/login` (Sanctum,
   token Bearer)
+- **Confirmação de email obrigatória (2026-07-22)**: cadastro valida o
+  email com `email:rfc,dns` — rejeita domínio inventado (ex:
+  `usuario@bol`) checando se o domínio tem registro DNS de verdade.
+  Configurável via `config('registration.validate_email_dns')`
+  (`VALIDATE_EMAIL_DNS` no `.env`), desligado nos testes
+  (`phpunit.xml`) porque domínios de teste como `example.com` têm um
+  registro **Null MX** de propósito (RFC 7505 — sinaliza "não aceito
+  email"), o que faria a checagem falhar mesmo sendo um domínio real.
+  Conta é criada mas **não loga automaticamente** — fica pendente até
+  confirmar. Token próprio (coluna `email_verification_token` em
+  `users`, hash salvo, nunca o valor puro — mesmo raciocínio do
+  `password_reset_tokens` nativo), porque não existe broker de
+  verificação de email pronto no Laravel como existe pra reset de
+  senha. `POST /api/email/verify` (token + email, confirma e já
+  retorna token de sessão — login automático) e `POST /api/email/resend`
+  (limitado a 3 tentativas/10min, sempre retorna a mesma mensagem
+  independente do email existir, mesmo padrão do forgot-password).
+  `POST /api/login` retorna 403 pra quem não confirmou. Envio do email
+  é protegido por try/catch — uma falha no provedor (Resend em modo
+  sandbox, por exemplo) não derruba o cadastro nem deixa o usuário
+  preso sem conseguir tentar de novo.
+  ⚠️ **Débito técnico de frontend**: `VerifyEmail.jsx` precisou de dois
+  ajustes por causa do React 19 Strict Mode (que monta/desmonta/remonta
+  componentes de propósito em desenvolvimento pra pegar efeito colateral
+  mal escrito) — um guard por token evita chamar a API duas vezes
+  (gastaria o token na primeira chamada), e a resposta da chamada real
+  **não** pode ser descartada por um flag de "componente ainda montado"
+  (React 18+ já ignora com segurança um `setState` de componente
+  desmontado de verdade; um flag manual nessa checagem some antes da
+  resposta chegar, no timing do Strict Mode).
 - **Recuperação de senha por email**: `POST /api/forgot-password` (sempre
   retorna a mesma mensagem, exista ou não o email, pra não vazar quais
   emails estão cadastrados) e `POST /api/reset-password` (token + email +
@@ -399,6 +433,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 - **Recuperação de senha**: link "Esqueci minha senha" no Login →
   `ForgotPassword.jsx` (`/esqueci-senha`) → `ResetPassword.jsx`
   (`/redefinir-senha`, lê `token`/`email` da URL via `useSearchParams`).
+- **Confirmação de email**: `Register.jsx` não loga mais direto após
+  cadastrar — mostra uma tela "confirme seu email". `Login.jsx` trata
+  o 403 de conta não confirmada com um botão de reenviar ali mesmo.
+  `VerifyEmail.jsx` (`/verificar-email`) lê `token`/`email` da URL,
+  confirma, loga automaticamente e redireciona pro Dashboard.
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
