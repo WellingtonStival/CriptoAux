@@ -4,9 +4,11 @@ namespace App\Services\Blockchain;
 
 use Illuminate\Support\Facades\Http;
 use App\Services\Blockchain\Contracts\BlockchainServiceInterface;
+use App\Services\Blockchain\Contracts\TransactionHistoryProvider;
 use Illuminate\Support\Facades\Cache;
+use Carbon\Carbon;
 
-class SolanaService implements BlockchainServiceInterface
+class SolanaService implements BlockchainServiceInterface, TransactionHistoryProvider
 {
     private const LAMPORTS_PER_SOL = 1_000_000_000;
 
@@ -59,5 +61,97 @@ class SolanaService implements BlockchainServiceInterface
     {
         // Endereco Solana = chave publica Ed25519 em Base58 (32 bytes -> 32 a 44 caracteres)
         return '/^[1-9A-HJ-NP-Za-km-z]{32,44}$/';
+    }
+
+    /**
+     * Lista as ultimas transacoes de um endereco.
+     *
+     * A RPC Solana nao retorna valor/direcao em getSignaturesForAddress,
+     * so a assinatura e o horario. Por isso, para cada assinatura, fazemos
+     * uma segunda chamada (getTransaction) e calculamos a variacao de
+     * saldo da propria conta (preBalance -> postBalance) para descobrir
+     * quanto entrou ou saiu.
+     */
+    public function getTransactions(string $address, int $limit = 10): array
+    {
+        $cacheKey = "sol_txs:{$address}:{$limit}";
+
+        return Cache::remember($cacheKey, now()->addSeconds(60), function () use ($address, $limit) {
+            $signaturesResponse = Http::post(config('blockchain.solana.rpc_url'), [
+                'jsonrpc' => '2.0',
+                'method' => 'getSignaturesForAddress',
+                'params' => [$address, ['limit' => $limit]],
+                'id' => 1,
+            ]);
+
+            if (!$signaturesResponse->successful()) {
+                abort(502, 'Erro ao consultar transações na blockchain');
+            }
+
+            $signatures = $signaturesResponse->json('result') ?? [];
+            $transactions = [];
+
+            foreach ($signatures as $entry) {
+                $signature = $entry['signature'] ?? null;
+
+                if (!$signature) {
+                    continue;
+                }
+
+                $transaction = $this->fetchTransactionDelta($address, $signature);
+
+                if ($transaction === null) {
+                    continue;
+                }
+
+                $transactions[] = [
+                    'hash' => $signature,
+                    'direction' => $transaction['direction'],
+                    'amount' => $transaction['amount'],
+                    'timestamp' => isset($entry['blockTime'])
+                        ? Carbon::createFromTimestamp($entry['blockTime'])->toIso8601String()
+                        : null,
+                    'explorer_url' => "https://solscan.io/tx/{$signature}",
+                ];
+            }
+
+            return $transactions;
+        });
+    }
+
+    private function fetchTransactionDelta(string $address, string $signature): ?array
+    {
+        $response = Http::post(config('blockchain.solana.rpc_url'), [
+            'jsonrpc' => '2.0',
+            'method' => 'getTransaction',
+            'params' => [$signature, ['maxSupportedTransactionVersion' => 0]],
+            'id' => 1,
+        ]);
+
+        if (!$response->successful()) {
+            return null;
+        }
+
+        $tx = $response->json('result');
+        $accountKeys = $tx['transaction']['message']['accountKeys'] ?? [];
+        $index = array_search($address, $accountKeys, true);
+
+        if ($index === false) {
+            return null;
+        }
+
+        $pre = $tx['meta']['preBalances'][$index] ?? null;
+        $post = $tx['meta']['postBalances'][$index] ?? null;
+
+        if ($pre === null || $post === null) {
+            return null;
+        }
+
+        $deltaLamports = $post - $pre;
+
+        return [
+            'direction' => $deltaLamports >= 0 ? 'in' : 'out',
+            'amount' => (float) bcdiv((string) abs($deltaLamports), (string) self::LAMPORTS_PER_SOL, 9),
+        ];
     }
 }

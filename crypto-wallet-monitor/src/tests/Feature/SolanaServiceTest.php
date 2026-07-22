@@ -62,4 +62,49 @@ class SolanaServiceTest extends TestCase
             $this->assertSame(502, $exception->getStatusCode());
         }
     }
+
+    public function test_lists_transactions_with_direction_and_amount(): void
+    {
+        Http::fake([
+            '*' => function ($request) {
+                $method = $request->data()['method'] ?? null;
+
+                if ($method === 'getSignaturesForAddress') {
+                    return Http::response([
+                        'jsonrpc' => '2.0',
+                        'id' => 1,
+                        'result' => [
+                            ['signature' => 'sig-received', 'blockTime' => 1700000000, 'err' => null],
+                        ],
+                    ]);
+                }
+
+                if ($method === 'getTransaction') {
+                    return Http::response([
+                        'jsonrpc' => '2.0',
+                        'id' => 1,
+                        'result' => [
+                            'transaction' => [
+                                'message' => ['accountKeys' => [self::VALID_ADDRESS, 'outro']],
+                            ],
+                            'meta' => [
+                                'preBalances' => [1_000_000_000, 0],
+                                'postBalances' => [1_500_000_000, 0],
+                            ],
+                        ],
+                    ]);
+                }
+
+                return Http::response([], 404);
+            },
+        ]);
+
+        $transactions = app(SolanaService::class)->getTransactions(self::VALID_ADDRESS);
+
+        $this->assertCount(1, $transactions);
+        $this->assertSame('sig-received', $transactions[0]['hash']);
+        $this->assertSame('in', $transactions[0]['direction']);
+        $this->assertSame(0.5, $transactions[0]['amount']);
+        $this->assertNotNull($transactions[0]['timestamp']);
+    }
 }

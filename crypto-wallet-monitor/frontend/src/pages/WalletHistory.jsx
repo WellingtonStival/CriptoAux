@@ -12,7 +12,9 @@ import {
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
 import TradingViewChart from "../components/TradingViewChart";
+import TransactionList from "../components/TransactionList";
 import { getWalletHistory, getPrices } from "../services/api";
+import { formatUsd, formatCompactUsd, formatDateTime } from "../utils/format";
 import { NETWORKS } from "../config/networks";
 
 const PERIODS = [
@@ -21,28 +23,6 @@ const PERIODS = [
   { value: "30d", label: "30 dias" },
   { value: "all", label: "Tudo" },
 ];
-
-function formatUsd(value) {
-  if (value === null || value === undefined) return "--";
-  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
-}
-
-function formatCompactUsd(value) {
-  if (value === null || value === undefined) return "--";
-  return `$${new Intl.NumberFormat("en-US", {
-    notation: "compact",
-    maximumFractionDigits: 2,
-  }).format(value)}`;
-}
-
-function formatDateTime(iso) {
-  return new Date(iso).toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function WalletHistory() {
   const { id } = useParams();
@@ -269,6 +249,13 @@ function WalletHistory() {
               </div>
             </div>
           )}
+
+          <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
+            <h2 className="mb-3 text-sm font-medium text-slate-300">
+              Últimas transações
+            </h2>
+            <TransactionList walletId={data.wallet_id} symbol={networkConfig?.symbol} />
+          </div>
 
           {networkConfig && (
             <div className="mt-6">

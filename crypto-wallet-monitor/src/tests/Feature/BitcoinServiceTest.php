@@ -60,4 +60,30 @@ class BitcoinServiceTest extends TestCase
             $this->assertSame(502, $exception->getStatusCode());
         }
     }
+
+    public function test_lists_transactions_with_direction_and_amount(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                [
+                    'txid' => 'tx-received',
+                    'status' => ['block_time' => 1700000000],
+                    'vin' => [
+                        ['prevout' => ['scriptpubkey_address' => 'outro-endereco', 'value' => 50_000_000]],
+                    ],
+                    'vout' => [
+                        ['scriptpubkey_address' => self::VALID_ADDRESS, 'value' => 80_000_000],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $transactions = app(BitcoinService::class)->getTransactions(self::VALID_ADDRESS);
+
+        $this->assertCount(1, $transactions);
+        $this->assertSame('tx-received', $transactions[0]['hash']);
+        $this->assertSame('in', $transactions[0]['direction']);
+        $this->assertSame(0.8, $transactions[0]['amount']);
+        $this->assertNotNull($transactions[0]['timestamp']);
+    }
 }

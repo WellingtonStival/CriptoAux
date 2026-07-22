@@ -45,8 +45,12 @@ export function getWallets() {
   return api.get('/wallets');
 }
 
-export function createWallet(address, network) {
-  return api.post('/wallets', { address, network });
+export function createWallet(address, network, name) {
+  return api.post('/wallets', { address, network, name: name || undefined });
+}
+
+export function renameWallet(walletId, name) {
+  return api.patch(`/wallets/${walletId}`, { name: name || null });
 }
 
 export function getWalletBalance(walletId) {
@@ -63,6 +67,22 @@ export function getWalletHistory(walletId, period) {
 
 export function deleteWallet(walletId) {
   return api.delete(`/wallets/${walletId}`);
+}
+
+export function getWalletTransactions(walletId) {
+  return api.get(`/wallets/${walletId}/transactions`);
+}
+
+/* =========================
+   SENHA
+========================= */
+
+export function forgotPassword(email) {
+  return api.post('/forgot-password', { email });
+}
+
+export function resetPassword({ token, email, password }) {
+  return api.post('/reset-password', { token, email, password });
 }
 
 export default api;
