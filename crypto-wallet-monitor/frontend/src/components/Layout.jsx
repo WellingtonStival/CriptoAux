@@ -1,5 +1,14 @@
-import { Link, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import { LayoutDashboard, Wallet, Newspaper, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { Button } from "./ui/button";
+import { cn } from "../lib/utils";
+
+const NAV_LINKS = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/wallets", label: "Minhas Wallets", icon: Wallet },
+  { to: "/noticias", label: "Notícias", icon: Newspaper },
+];
 
 function Layout({ children }) {
   const { logout } = useAuth();
@@ -11,35 +20,48 @@ function Layout({ children }) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-        <div className="flex items-center gap-6">
-          <span className="text-lg font-semibold text-slate-50">
-            Crypto Wallet Monitor
-          </span>
+    <div className="min-h-screen bg-background">
+      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-8">
+            <span className="text-lg font-semibold tracking-tight text-foreground">
+              Nexfolio
+            </span>
 
-          <nav className="flex gap-4 text-sm">
-            <Link to="/" className="text-slate-300 hover:text-slate-50">
-              Dashboard
-            </Link>
-            <Link to="/wallets" className="text-slate-300 hover:text-slate-50">
-              Minhas Wallets
-            </Link>
-            <Link to="/noticias" className="text-slate-300 hover:text-slate-50">
-              Notícias
-            </Link>
-          </nav>
+            <nav className="flex flex-wrap gap-1">
+              {NAV_LINKS.map((link) => {
+                const Icon = link.icon;
+
+                return (
+                  <NavLink
+                    key={link.to}
+                    to={link.to}
+                    end={link.end}
+                    className={({ isActive }) =>
+                      cn(
+                        "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                        isActive
+                          ? "bg-muted text-foreground"
+                          : "text-muted-foreground hover:text-foreground"
+                      )
+                    }
+                  >
+                    <Icon className="size-4" />
+                    {link.label}
+                  </NavLink>
+                );
+              })}
+            </nav>
+          </div>
+
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            <LogOut className="size-4" />
+            Sair
+          </Button>
         </div>
-
-        <button
-          onClick={handleLogout}
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          Sair
-        </button>
       </header>
 
-      <main className="mx-auto max-w-2xl px-6 py-8">{children}</main>
+      <main className="mx-auto max-w-6xl px-6 py-8">{children}</main>
     </div>
   );
 }

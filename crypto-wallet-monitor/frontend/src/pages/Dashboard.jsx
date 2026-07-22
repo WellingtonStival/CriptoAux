@@ -9,9 +9,28 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import {
+  Wallet,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  ArrowDownToLine,
+  ArrowUpToLine,
+  AlertCircle,
+  Inbox,
+  PieChart,
+  Layers,
+} from "lucide-react";
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
 import PricesPanel from "../components/PricesPanel";
+import StatCard from "../components/StatCard";
+import { Button } from "../components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Alert, AlertDescription } from "../components/ui/alert";
+import { Skeleton } from "../components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { getPortfolioHistory, getPrices } from "../services/api";
 import { formatUsd, formatDateTime } from "../utils/format";
 import { NETWORKS } from "../config/networks";
@@ -24,10 +43,10 @@ const PERIODS = [
 ];
 
 const CONCENTRATION_LEVELS = {
-  diversificado: { label: "Diversificado", className: "bg-emerald-500/15 text-emerald-400" },
-  moderado: { label: "Moderado", className: "bg-amber-500/15 text-amber-400" },
-  concentrado: { label: "Concentrado", className: "bg-red-500/15 text-red-400" },
-  indefinido: { label: "Sem dados", className: "bg-slate-500/15 text-slate-400" },
+  diversificado: { label: "Diversificado", variant: "success" },
+  moderado: { label: "Moderado", variant: "warning" },
+  concentrado: { label: "Concentrado", variant: "destructive" },
+  indefinido: { label: "Sem dados", variant: "outline" },
 };
 
 function Dashboard() {
@@ -72,145 +91,153 @@ function Dashboard() {
     label: formatDateTime(point.captured_at),
   }));
 
+  const isPositiveChange = (data?.summary.change_value_usd ?? 0) >= 0;
+
   return (
     <Layout>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-slate-50">Meu Patrimônio</h1>
-        <Link
-          to="/wallets"
-          className="rounded-md border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-        >
-          Gerenciar wallets
-        </Link>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-foreground">Meu Patrimônio</h1>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/wallets">
+            <Wallet className="size-4" />
+            Gerenciar wallets
+          </Link>
+        </Button>
       </div>
 
-      <div className="mb-6 flex gap-2">
-        {PERIODS.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => setPeriod(option.value)}
-            className={`rounded-md px-3 py-1.5 text-sm ${
-              period === option.value
-                ? "bg-indigo-600 text-white"
-                : "border border-slate-700 text-slate-300 hover:bg-slate-800"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={period} onValueChange={setPeriod} className="mb-6">
+        <TabsList>
+          {PERIODS.map((option) => (
+            <TabsTrigger key={option.value} value={option.value}>
+              {option.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {loading && <p className="text-slate-400">Carregando...</p>}
-      {error && <p className="text-red-400">{error}</p>}
+      {loading && (
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Skeleton key={index} className="h-20 w-full" />
+          ))}
+        </div>
+      )}
+
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {!loading && !error && data && (
         <>
           {data.points.length === 0 ? (
-            <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-              <p className="text-slate-400">
-                Nenhum dado de patrimônio ainda. Cadastre uma wallet e
-                consulte o saldo dela pra começar a acumular histórico.
-              </p>
-              <Link
-                to="/wallets"
-                className="mt-3 inline-block text-sm text-indigo-400 hover:underline"
-              >
-                Ir para Minhas Wallets →
-              </Link>
-            </div>
+            <Card className="mb-6">
+              <CardContent className="flex flex-col items-start gap-3 pt-4">
+                <Inbox className="size-6 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  Nenhum dado de patrimônio ainda. Cadastre uma wallet e
+                  consulte o saldo dela pra começar a acumular histórico.
+                </p>
+                <Button variant="link" className="h-auto p-0" asChild>
+                  <Link to="/wallets">Ir para Minhas Wallets →</Link>
+                </Button>
+              </CardContent>
+            </Card>
           ) : (
             <>
               <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <div className="text-xs text-slate-400">Valor atual</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-50">
-                    {formatUsd(data.summary.current_value_usd)}
-                  </div>
-                </div>
+                <StatCard
+                  icon={DollarSign}
+                  label="Valor atual"
+                  value={formatUsd(data.summary.current_value_usd)}
+                />
 
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <div className="text-xs text-slate-400">
-                    Variação no período
-                  </div>
-                  <div className="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-50">
-                    {formatUsd(data.summary.change_value_usd)}
-                    <PriceChangeBadge change={data.summary.change_percent} />
-                  </div>
-                </div>
+                <StatCard
+                  icon={isPositiveChange ? TrendingUp : TrendingDown}
+                  label="Variação no período"
+                  value={formatUsd(data.summary.change_value_usd)}
+                  extra={<PriceChangeBadge change={data.summary.change_percent} />}
+                />
 
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <div className="text-xs text-slate-400">Mínimo</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-50">
-                    {formatUsd(data.summary.min_value_usd)}
-                  </div>
-                </div>
+                <StatCard
+                  icon={ArrowDownToLine}
+                  label="Mínimo"
+                  value={formatUsd(data.summary.min_value_usd)}
+                />
 
-                <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <div className="text-xs text-slate-400">Máximo</div>
-                  <div className="mt-1 text-lg font-semibold text-slate-50">
-                    {formatUsd(data.summary.max_value_usd)}
-                  </div>
-                </div>
+                <StatCard
+                  icon={ArrowUpToLine}
+                  label="Máximo"
+                  value={formatUsd(data.summary.max_value_usd)}
+                />
               </div>
 
-              <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-                <h2 className="text-sm font-medium text-slate-300">
-                  Evolução do patrimônio
-                </h2>
-                <p className="mb-3 text-xs text-slate-500">
-                  Soma do valor de todas as suas wallets em cada snapshot
-                  registrado, no período selecionado acima.
-                </p>
-
-                {chartData.length < 2 ? (
-                  <p className="text-slate-400">
-                    Ainda não há dados suficientes nesse período para
-                    desenhar um gráfico.
-                  </p>
-                ) : (
-                  <ResponsiveContainer width="100%" height={300}>
-                    <LineChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                      <XAxis
-                        dataKey="label"
-                        stroke="#64748b"
-                        fontSize={12}
-                        tick={{ fill: "#94a3b8" }}
-                      />
-                      <YAxis
-                        stroke="#64748b"
-                        fontSize={12}
-                        tick={{ fill: "#94a3b8" }}
-                        tickFormatter={(value) => `$${value.toLocaleString()}`}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "#020617",
-                          border: "1px solid #1e293b",
-                          borderRadius: 8,
-                        }}
-                        labelStyle={{ color: "#f8fafc" }}
-                        formatter={(value) => [formatUsd(value), "Valor"]}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="value_usd"
-                        stroke="#6366f1"
-                        strokeWidth={2}
-                        dot={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Evolução do patrimônio</CardTitle>
+                  <CardDescription>
+                    Soma do valor de todas as suas wallets em cada snapshot
+                    registrado, no período selecionado acima.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {chartData.length < 2 ? (
+                    <p className="text-muted-foreground">
+                      Ainda não há dados suficientes nesse período para
+                      desenhar um gráfico.
+                    </p>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={chartData}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          stroke="var(--color-border)"
+                        />
+                        <XAxis
+                          dataKey="label"
+                          stroke="var(--color-border)"
+                          fontSize={12}
+                          tick={{ fill: "var(--color-muted-foreground)" }}
+                        />
+                        <YAxis
+                          stroke="var(--color-border)"
+                          fontSize={12}
+                          tick={{ fill: "var(--color-muted-foreground)" }}
+                          tickFormatter={(value) => `$${value.toLocaleString()}`}
+                        />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: "var(--color-card)",
+                            border: "1px solid var(--color-border)",
+                            borderRadius: 8,
+                          }}
+                          labelStyle={{ color: "var(--color-foreground)" }}
+                          formatter={(value) => [formatUsd(value), "Valor"]}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value_usd"
+                          stroke="var(--color-primary)"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
 
               {data.allocation.length > 0 && (
-                <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <h2 className="mb-3 text-sm font-medium text-slate-300">
-                    Distribuição por moeda
-                  </h2>
-
-                  <div className="flex flex-col gap-3">
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <PieChart className="size-4" />
+                      Distribuição por moeda
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
                     {data.allocation.map((item) => {
                       const config = NETWORKS[item.network] ?? {
                         label: item.network,
@@ -220,19 +247,19 @@ function Dashboard() {
                       return (
                         <div key={item.network}>
                           <div className="mb-1 flex items-center justify-between text-sm">
-                            <span className="flex items-center gap-2 text-slate-200">
+                            <span className="flex items-center gap-2 text-foreground">
                               <span
                                 className="h-2 w-2 rounded-full"
                                 style={{ backgroundColor: config.color }}
                               />
                               {config.label}
                             </span>
-                            <span className="text-slate-400">
+                            <span className="text-muted-foreground">
                               {formatUsd(item.value_usd)} ·{" "}
                               {item.percent.toFixed(1)}%
                             </span>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
                               className="h-full rounded-full"
                               style={{
@@ -244,22 +271,24 @@ function Dashboard() {
                         </div>
                       );
                     })}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               )}
 
               {data.concentration && (
-                <div className="mb-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
-                  <h2 className="text-sm font-medium text-slate-300">
-                    Concentração
-                  </h2>
-                  <p className="mb-3 text-xs text-slate-500">
-                    O quanto seu patrimônio está espalhado entre moedas e
-                    wallets diferentes — não é uma recomendação, é só um
-                    fato sobre a distribuição.
-                  </p>
-
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Layers className="size-4" />
+                      Concentração
+                    </CardTitle>
+                    <CardDescription>
+                      O quanto seu patrimônio está espalhado entre moedas e
+                      wallets diferentes — não é uma recomendação, é só um
+                      fato sobre a distribuição.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <ConcentrationCard
                       title="Por moeda"
                       concentration={data.concentration.by_network}
@@ -276,8 +305,8 @@ function Dashboard() {
                       concentration={data.concentration.by_wallet}
                       topLabel={data.concentration.by_wallet.top_wallet_label}
                     />
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               )}
             </>
           )}
@@ -293,24 +322,24 @@ function ConcentrationCard({ title, concentration, topLabel }) {
   const level = CONCENTRATION_LEVELS[concentration.level] ?? CONCENTRATION_LEVELS.indefinido;
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm text-slate-300">{title}</span>
-        <span className={`rounded px-2 py-0.5 text-xs font-medium ${level.className}`}>
-          {level.label}
-        </span>
-      </div>
+    <Card className="bg-background">
+      <CardContent className="pt-4">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm text-foreground">{title}</span>
+          <Badge variant={level.variant}>{level.label}</Badge>
+        </div>
 
-      {topLabel ? (
-        <p className="text-sm text-slate-400">
-          Maior posição:{" "}
-          <span className="text-slate-200">{topLabel}</span> ·{" "}
-          {concentration.top_percent.toFixed(1)}% do total
-        </p>
-      ) : (
-        <p className="text-sm text-slate-500">Sem dados suficientes ainda.</p>
-      )}
-    </div>
+        {topLabel ? (
+          <p className="text-sm text-muted-foreground">
+            Maior posição:{" "}
+            <span className="text-foreground">{topLabel}</span> ·{" "}
+            {concentration.top_percent.toFixed(1)}% do total
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">Sem dados suficientes ainda.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
