@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function Layout({ children }) {
@@ -13,9 +13,20 @@ function Layout({ children }) {
   return (
     <div className="min-h-screen bg-slate-900">
       <header className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
-        <span className="text-lg font-semibold text-slate-50">
-          Crypto Wallet Monitor
-        </span>
+        <div className="flex items-center gap-6">
+          <span className="text-lg font-semibold text-slate-50">
+            Crypto Wallet Monitor
+          </span>
+
+          <nav className="flex gap-4 text-sm">
+            <Link to="/" className="text-slate-300 hover:text-slate-50">
+              Dashboard
+            </Link>
+            <Link to="/wallets" className="text-slate-300 hover:text-slate-50">
+              Minhas Wallets
+            </Link>
+          </nav>
+        </div>
 
         <button
           onClick={handleLogout}

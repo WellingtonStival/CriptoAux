@@ -7,6 +7,7 @@ use App\Http\Controllers\WalletController;
 use App\Http\Controllers\WalletBalanceController;
 use App\Http\Controllers\WalletHistoryController;
 use App\Http\Controllers\WalletTransactionController;
+use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\PriceController;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -20,6 +21,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/wallets/{id}', [WalletController::class, 'update']);
     Route::delete('/wallets/{id}', [WalletController::class, 'destroy']);
     Route::get('/prices', [PriceController::class, 'index']);
+    Route::get('/portfolio/history', [PortfolioController::class, 'history']);
 });
 
 Route::middleware('auth:sanctum')->get(

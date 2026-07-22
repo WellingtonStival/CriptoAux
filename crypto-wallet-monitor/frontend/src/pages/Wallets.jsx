@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import WalletForm from "../components/WalletForm";
 import WalletList from "../components/WalletList";
-import PricesPanel from "../components/PricesPanel";
-import PortfolioSummary from "../components/PortfolioSummary";
 import Layout from "../components/Layout";
 import { getWallets, getPrices } from "../services/api";
 
@@ -13,7 +11,6 @@ function Wallets() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [prices, setPrices] = useState(null);
-  const [balances, setBalances] = useState({});
 
   useEffect(() => {
     async function loadWallets() {
@@ -52,19 +49,6 @@ function Wallets() {
     setWallets((currentWallets) =>
       currentWallets.filter((wallet) => wallet.id !== walletId)
     );
-
-    setBalances((currentBalances) => {
-      const updated = { ...currentBalances };
-      delete updated[walletId];
-      return updated;
-    });
-  }
-
-  function handleBalanceLoaded(walletId, balance) {
-    setBalances((currentBalances) => ({
-      ...currentBalances,
-      [walletId]: balance,
-    }));
   }
 
   function handleWalletRenamed(walletId, name) {
@@ -81,16 +65,6 @@ function Wallets() {
         Minhas Wallets
       </h1>
 
-      {wallets.length > 0 && (
-        <PortfolioSummary
-          wallets={wallets}
-          balances={balances}
-          prices={prices}
-        />
-      )}
-
-      <PricesPanel prices={prices} />
-
       <WalletForm onCreated={handleWalletCreated} />
 
       {loading && <p className="text-slate-400">Carregando carteiras...</p>}
@@ -106,7 +80,6 @@ function Wallets() {
           wallets={wallets}
           prices={prices}
           onDeleted={handleWalletDeleted}
-          onBalanceLoaded={handleBalanceLoaded}
           onRenamed={handleWalletRenamed}
         />
       )}

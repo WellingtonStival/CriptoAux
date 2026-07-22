@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
+import Dashboard from "./pages/Dashboard";
 import Wallets from "./pages/Wallets";
 import WalletHistory from "./pages/WalletHistory";
 import Login from "./pages/Login";
@@ -17,6 +18,15 @@ function App() {
 
       <Route
         path="/"
+        element={
+          <PrivateRoute>
+            <Dashboard />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/wallets"
         element={
           <PrivateRoute>
             <Wallets />

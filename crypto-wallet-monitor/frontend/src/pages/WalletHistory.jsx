@@ -73,7 +73,7 @@ function WalletHistory() {
     <Layout>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <Link to="/" className="text-sm text-indigo-400 hover:underline">
+          <Link to="/wallets" className="text-sm text-indigo-400 hover:underline">
             ← Voltar
           </Link>
           <h1 className="mt-1 text-2xl font-bold text-slate-50">

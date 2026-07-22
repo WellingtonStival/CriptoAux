@@ -73,6 +73,10 @@ export function getWalletTransactions(walletId) {
   return api.get(`/wallets/${walletId}/transactions`);
 }
 
+export function getPortfolioHistory(period) {
+  return api.get('/portfolio/history', { params: { period } });
+}
+
 /* =========================
    SENHA
 ========================= */
