@@ -11,7 +11,8 @@ import {
 } from "recharts";
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
-import { getWalletHistory } from "../services/api";
+import TradingViewChart from "../components/TradingViewChart";
+import { getWalletHistory, getPrices } from "../services/api";
 import { NETWORKS } from "../config/networks";
 
 const PERIODS = [
@@ -24,6 +25,14 @@ const PERIODS = [
 function formatUsd(value) {
   if (value === null || value === undefined) return "--";
   return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
+function formatCompactUsd(value) {
+  if (value === null || value === undefined) return "--";
+  return `$${new Intl.NumberFormat("en-US", {
+    notation: "compact",
+    maximumFractionDigits: 2,
+  }).format(value)}`;
 }
 
 function formatDateTime(iso) {
@@ -41,6 +50,7 @@ function WalletHistory() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [marketData, setMarketData] = useState(null);
 
   useEffect(() => {
     async function loadHistory() {
@@ -59,11 +69,25 @@ function WalletHistory() {
     loadHistory();
   }, [id, period]);
 
+  useEffect(() => {
+    async function loadMarketData() {
+      try {
+        const response = await getPrices();
+        setMarketData(response.data);
+      } catch {
+        // dados de mercado sao um extra: se falhar, o resto da tela continua
+      }
+    }
+
+    loadMarketData();
+  }, []);
+
   const networkConfig = data ? NETWORKS[data.network] : null;
   const chartData = (data?.points ?? []).map((point) => ({
     ...point,
     label: formatDateTime(point.captured_at),
   }));
+  const coinMarketData = data ? marketData?.[data.network] : null;
 
   return (
     <Layout>
@@ -141,6 +165,14 @@ function WalletHistory() {
           </div>
 
           <div className="rounded-lg border border-slate-800 bg-slate-950 p-4">
+            <h2 className="text-sm font-medium text-slate-300">
+              Valor da carteira ao longo do tempo
+            </h2>
+            <p className="mb-3 text-xs text-slate-500">
+              Saldo × preço da moeda em cada snapshot registrado, no período
+              selecionado acima.
+            </p>
+
             {chartData.length < 2 ? (
               <p className="text-slate-400">
                 Ainda não há dados suficientes nesse período para desenhar um
@@ -184,6 +216,68 @@ function WalletHistory() {
               </ResponsiveContainer>
             )}
           </div>
+
+          {coinMarketData && (
+            <div className="mt-6 rounded-lg border border-slate-800 bg-slate-950 p-4">
+              <h2 className="mb-3 text-sm font-medium text-slate-300">
+                Dados de mercado — {networkConfig?.label}
+              </h2>
+
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div>
+                  <div className="text-xs text-slate-400">Market cap</div>
+                  <div className="mt-1 text-slate-50">
+                    {formatCompactUsd(coinMarketData.market_cap)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400">Volume 24h</div>
+                  <div className="mt-1 text-slate-50">
+                    {formatCompactUsd(coinMarketData.volume_24h)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400">Máx. / Mín. 24h</div>
+                  <div className="mt-1 text-slate-50">
+                    {formatUsd(coinMarketData.high_24h)} /{" "}
+                    {formatUsd(coinMarketData.low_24h)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400">Variação 24h</div>
+                  <div className="mt-1">
+                    <PriceChangeBadge change={coinMarketData.change_24h} />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400">Variação 7d</div>
+                  <div className="mt-1">
+                    <PriceChangeBadge change={coinMarketData.change_7d} />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs text-slate-400">Variação 30d</div>
+                  <div className="mt-1">
+                    <PriceChangeBadge change={coinMarketData.change_30d} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {networkConfig && (
+            <div className="mt-6">
+              <h2 className="mb-3 text-sm font-medium text-slate-300">
+                Gráfico de mercado (TradingView)
+              </h2>
+              <TradingViewChart network={data.network} />
+            </div>
+          )}
         </>
       )}
     </Layout>

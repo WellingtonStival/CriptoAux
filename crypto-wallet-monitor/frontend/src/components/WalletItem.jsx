@@ -6,7 +6,7 @@ import PriceChangeBadge from "./PriceChangeBadge";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
-function WalletItem({ wallet, prices, onDeleted }) {
+function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded }) {
   const networkConfig = NETWORKS[wallet.network] ?? {
     label: wallet.network,
     symbol: "",
@@ -40,6 +40,7 @@ function WalletItem({ wallet, prices, onDeleted }) {
       const value = response.data.balance;
 
       setBalance(value);
+      onBalanceLoaded?.(wallet.id, value);
       localStorage.setItem(
         `wallet_balance_${wallet.id}`,
         JSON.stringify(value)
