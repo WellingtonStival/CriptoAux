@@ -118,10 +118,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   limite cada wallet geraria um ponto de histórico por minuto só de
   alguém deixar a aba aberta.
 - **Cotações**: `App\Services\Market\PriceService` consulta a API pública
-  da CoinGecko (`/simple/price`) e retorna preço em USD + variação de 24h
-  para cada rede suportada (reaproveita
-  `BlockchainResolver::supportedNetworks()` como IDs da CoinGecko — eles
-  coincidem hoje). Exposto em `GET /api/prices`, cacheado por 60s.
+  da CoinGecko (`/coins/markets`) e retorna, por rede suportada: preço USD,
+  variação 24h/7d/30d, market cap, volume 24h e máxima/mínima 24h
+  (reaproveita `BlockchainResolver::supportedNetworks()` como IDs da
+  CoinGecko — eles coincidem hoje). Exposto em `GET /api/prices`, cacheado
+  por 60s.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -154,7 +155,15 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   período (24h/7d/30d/tudo), cards de indicadores (saldo atual, valor
   atual, variação no período, mín/máx) e gráfico de linha (Recharts) do
   valor em USD ao longo do tempo. Mostra mensagem de "dados insuficientes"
-  quando há menos de 2 pontos no período.
+  quando há menos de 2 pontos no período. Também mostra uma seção "Dados
+  de mercado" (market cap, volume, máx/mín 24h, variação 24h/7d/30d) e o
+  **widget oficial do TradingView** (`TradingViewChart.jsx`, carrega
+  `s3.tradingview.com/tv.js` dinamicamente) com o gráfico de candles real
+  da moeda (símbolo mapeado pra par da Binance, ex: `BINANCE:ETHUSDT`).
+- **Valor total do portfólio** (`PortfolioSummary.jsx`): soma
+  saldo × preço de todas as wallets, calculado no frontend a partir dos
+  saldos que cada `WalletItem` já busca (reportados ao componente pai via
+  `onBalanceLoaded`) e do `PricesPanel`. Aparece no topo de `Wallets.jsx`.
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -171,6 +180,11 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 - `AuthContext.jsx` tem um aviso de lint (`react-refresh/only-export-components`)
   por exportar hook + componente no mesmo arquivo — pré-existente, não
   bloqueia nada, mas pode ser resolvido separando o hook em outro arquivo.
+- `TradingViewChart.jsx` carrega um script de terceiro (`s3.tradingview.com/tv.js`)
+  e mostra a marca "TradingView" no widget — é o widget oficial gratuito,
+  não é branding nosso. Se algum dia quisermos um gráfico 100% no nosso
+  tema/sem dependência externa, a alternativa é `lightweight-charts` (lib
+  open-source do próprio TradingView) + dados de candle da CoinGecko.
 
 ## Roadmap (por fases, prioridade nessa ordem)
 
@@ -195,6 +209,10 @@ depois da Fase 3.
 **Fase 1.8 — Auto-atualização + excluir wallet pela UI** ✅ concluída:
 saldo/preço atualizam sozinhos (60s), botão de remover com confirmação
 inline
+
+**Fase 1.9 — Indicadores de portfólio + gráfico de mercado** ✅ concluída:
+valor total do portfólio, dados de mercado (market cap/volume/máx-mín/
+variação 7d/30d) e gráfico de candles real via widget do TradingView
 
 **Fase 2 — Completar funcionalidades** (atual)
 Ideias já levantadas: Kaspa (blockchain adicional) → alertas de
