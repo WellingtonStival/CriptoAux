@@ -11,8 +11,9 @@ class NewsController extends Controller
     public function index(Request $request, NewsService $newsService)
     {
         $network = $request->query('network');
+        $allowed = [...BlockchainResolver::supportedNetworks(), NewsService::OTHER];
 
-        if ($network !== null && !in_array($network, BlockchainResolver::supportedNetworks(), true)) {
+        if ($network !== null && !in_array($network, $allowed, true)) {
             return response()->json([
                 'message' => 'Rede não suportada.',
             ], 422);

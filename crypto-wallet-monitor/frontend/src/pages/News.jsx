@@ -15,6 +15,7 @@ const FILTERS = [
   { value: "ethereum", label: "Ethereum" },
   { value: "solana", label: "Solana" },
   { value: "bitcoin", label: "Bitcoin" },
+  { value: "other", label: "Outros" },
 ];
 
 function News() {

@@ -79,6 +79,37 @@ class NewsControllerTest extends TestCase
             ->assertJsonCount(1, 'news');
     }
 
+    public function test_user_can_filter_news_by_other(): void
+    {
+        $generalNewsFeed = <<<XML
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0">
+                <channel>
+                    <title>CoinDesk</title>
+                    <item>
+                        <title>Reguladores discutem novas regras para o setor</title>
+                        <link>https://example.com/1</link>
+                        <description></description>
+                        <pubDate>Wed, 22 Jul 2026 10:00:00 GMT</pubDate>
+                    </item>
+                </channel>
+            </rss>
+            XML;
+
+        Http::fake([
+            'coindesk.com/*' => Http::response($generalNewsFeed),
+            '*' => Http::response($this->emptyFeed()),
+        ]);
+
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->getJson('/api/news?network=other');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('network', 'other')
+            ->assertJsonCount(1, 'news');
+    }
+
     public function test_rejects_an_unsupported_network(): void
     {
         Sanctum::actingAs(User::factory()->create());

@@ -111,6 +111,54 @@ class NewsServiceTest extends TestCase
         $this->assertSame('Bitcoin still working fine', $news[0]['title']);
     }
 
+    public function test_other_returns_news_with_no_currency_detected(): void
+    {
+        Http::fake([
+            'coindesk.com/*' => Http::response($this->rssFeed('CoinDesk', [
+                [
+                    'title' => 'SEC discute nova regulacao para o mercado cripto',
+                    'url' => 'https://example.com/1',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 10:00:00 GMT',
+                ],
+                [
+                    'title' => 'Bitcoin update',
+                    'url' => 'https://example.com/2',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 09:00:00 GMT',
+                ],
+            ])),
+            '*' => Http::response($this->emptyFeed()),
+        ]);
+
+        $news = app(NewsService::class)->latest(NewsService::OTHER);
+
+        $this->assertCount(1, $news);
+        $this->assertSame('SEC discute nova regulacao para o mercado cripto', $news[0]['title']);
+        $this->assertSame([], $news[0]['currencies']);
+    }
+
+    public function test_filtering_by_network_is_limited_to_the_15_most_recent(): void
+    {
+        $items = collect(range(1, 20))->map(fn ($i) => [
+            'title' => "Bitcoin update {$i}",
+            'url' => "https://example.com/{$i}",
+            'description' => '',
+            'pubDate' => now()->subMinutes($i)->toRfc2822String(),
+        ])->all();
+
+        Http::fake([
+            'coindesk.com/*' => Http::response($this->rssFeed('CoinDesk', $items)),
+            '*' => Http::response($this->emptyFeed()),
+        ]);
+
+        $news = app(NewsService::class)->latest('bitcoin');
+
+        $this->assertCount(15, $news);
+        // o mais recente (subMinutes(1)) deve vir primeiro
+        $this->assertSame('Bitcoin update 1', $news[0]['title']);
+    }
+
     public function test_caches_the_combined_result_and_does_not_repeat_the_requests(): void
     {
         Http::fake(['*' => Http::response($this->emptyFeed())]);

@@ -20,6 +20,30 @@ class NewsService
     private const CACHE_SECONDS = 600;
 
     /**
+     * Quantas noticias manter no pool combinado (as 3 fontes juntas),
+     * antes de qualquer filtro por moeda. Precisa ser bem maior que o
+     * limite por aba (self::PER_NETWORK_LIMIT) - do contrario o corte
+     * geral come o espaco antes do filtro por moeda rodar, deixando as
+     * abas de moeda especifica com poucos itens mesmo quando os feeds
+     * originais tem bastante coisa sobre aquele assunto.
+     */
+    private const MAX_POOL_SIZE = 120;
+
+    /**
+     * Quantas noticias mostrar quando filtrado por uma moeda especifica
+     * ou por "other" (sem moeda identificada). A aba "Todas" nao usa
+     * esse limite - mostra o pool inteiro.
+     */
+    private const PER_NETWORK_LIMIT = 15;
+
+    /**
+     * Valor especial de rede para noticias gerais de cripto/mercado que
+     * a heuristica de palavra-chave nao conseguiu associar a nenhuma
+     * moeda especifica.
+     */
+    public const OTHER = 'other';
+
+    /**
      * Feeds RSS publicos de fontes de noticias cripto conhecidas. Sem
      * chave de API, sem conta, sem custo - diferente de APIs de
      * agregacao (ex: CryptoPanic), RSS e um padrao web estavel que nao
@@ -67,10 +91,11 @@ class NewsService
             return $all;
         }
 
-        return collect($all)
-            ->filter(fn ($item) => in_array($network, $item['currencies'], true))
-            ->values()
-            ->all();
+        $filtered = $network === self::OTHER
+            ? collect($all)->filter(fn ($item) => empty($item['currencies']))
+            : collect($all)->filter(fn ($item) => in_array($network, $item['currencies'], true));
+
+        return $filtered->take(self::PER_NETWORK_LIMIT)->values()->all();
     }
 
     private function fetchAndTagAll(): array
@@ -82,7 +107,7 @@ class NewsService
                 'currencies' => $this->detectCurrencies($item['title'] . ' ' . $item['summary']),
             ])
             ->sortByDesc('published_at')
-            ->take(30)
+            ->take(self::MAX_POOL_SIZE)
             ->values();
 
         return $this->translate($items)->all();
