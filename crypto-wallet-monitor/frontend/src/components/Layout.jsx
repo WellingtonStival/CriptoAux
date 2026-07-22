@@ -3,6 +3,8 @@ import { LayoutDashboard, Wallet, Newspaper, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
+import logoIcon from "../assets/logo-icon.png";
+import logoWordmark from "../assets/logo-wordmark.png";
 
 const NAV_LINKS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -24,8 +26,13 @@ function Layout({ children }) {
       <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-4">
           <div className="flex flex-wrap items-center gap-4 sm:gap-8">
-            <span className="text-lg font-semibold tracking-tight text-foreground">
-              Nexfolio
+            <span className="flex shrink-0 items-center gap-2">
+              <img src={logoIcon} alt="" className="size-[30px]" />
+              <img
+                src={logoWordmark}
+                alt="Nexfolio"
+                className="hidden h-[21px] sm:block"
+              />
             </span>
 
             <nav className="flex flex-wrap gap-1">

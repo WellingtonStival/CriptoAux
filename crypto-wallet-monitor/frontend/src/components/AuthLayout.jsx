@@ -1,10 +1,13 @@
 import { Card, CardContent } from "./ui/card";
+import logoIcon from "../assets/logo-icon.png";
+import logoWordmark from "../assets/logo-wordmark.png";
 
 function AuthLayout({ title, children }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-background px-4">
-      <span className="text-xl font-semibold tracking-tight text-foreground">
-        Nexfolio
+      <span className="flex items-center gap-2.5">
+        <img src={logoIcon} alt="" className="size-[46px]" />
+        <img src={logoWordmark} alt="Nexfolio" className="h-[32px]" />
       </span>
 
       <Card className="w-full max-w-sm">
