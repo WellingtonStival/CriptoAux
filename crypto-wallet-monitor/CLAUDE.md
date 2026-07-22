@@ -1,4 +1,8 @@
-# Crypto Wallet Monitor — Contexto do Projeto
+# Nexfolio — Contexto do Projeto
+
+> Nome do sistema até 2026-07-22: "Crypto Wallet Monitor" (renomeado para
+> Nexfolio — se encontrar esse nome antigo em commits/telas antigas, é o
+> mesmo projeto).
 
 > Este arquivo existe para que qualquer agente de IA (Claude, Codex, etc.) ou
 > desenvolvedor retome o projeto sem precisar reler todo o histórico de
@@ -263,6 +267,31 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
   usam classes utilitárias, não inline styles
+- **Fundação de UI (2026-07-22)**: `frontend/src/components/ui/` tem
+  componentes no estilo shadcn/ui — Button, Card, Badge, Alert, Skeleton,
+  Tabs — copiados como código-fonte pro repo (não é dependência de pacote
+  opaca; dá pra ler/editar cada um), construídos sobre Tailwind v4 +
+  Radix UI (`@radix-ui/react-tabs`, `@radix-ui/react-slot`) +
+  `class-variance-authority` (variantes) + `clsx`/`tailwind-merge`
+  (helper `cn()` em `frontend/src/lib/utils.js`). Ícones via
+  `lucide-react`. Paleta/tokens de cor centralizados em
+  `frontend/src/index.css` (bloco `@theme` do Tailwind v4 — `--color-*`
+  vira variável CSS de verdade em `:root`, por isso dá pra usar
+  `var(--color-primary)` etc. diretamente no Recharts). Alias `@/` pro
+  `src/` configurado em `vite.config.js` (ainda não usado nos imports
+  atuais, que são relativos — disponível pra próximos componentes).
+  ✅ **Rollout completo (2026-07-22)**: todas as telas migraram —
+  Dashboard, `Wallets.jsx` (+ `WalletForm`, `WalletItem`, `WalletList`
+  em grid responsivo 1/2/3 colunas), `WalletHistory.jsx` (+
+  `TransactionList`, `TradingViewChart`), `News.jsx`, e as 4 telas
+  públicas de auth (`Login`, `Register`, `ForgotPassword`,
+  `ResetPassword`) via um `AuthLayout.jsx` novo (card centralizado com
+  a marca Nexfolio, evita repetir o mesmo markup 4x). `StatCard.jsx`
+  virou componente compartilhado (usado no Dashboard e no
+  WalletHistory). Novos componentes de formulário em `ui/`: `Input`,
+  `Label`, `Select` (wrapper estilizado do `<select>` nativo — não usa
+  Radix Select, simplicidade > customização nesse caso). Testado no
+  navegador tela por tela, lint limpo.
 - `Layout.jsx` — cabeçalho + logout, envolve as páginas autenticadas
 - Login e Register usam `AuthContext.login()` + `useNavigate()` (SPA, sem
   reload); logout funcional
@@ -398,6 +427,11 @@ agregação de RSS (CoinDesk, Cointelegraph, Decrypt), sem chave de API
 pivotamos pra RSS), resumo de cada notícia, tradução pra PT-BR via DeepL
 (numa única chamada por ciclo de cache, autenticação por header). Testado
 ponta a ponta com chave real em 2026-07-22.
+
+**Fase 2.5 — Redesign visual (fundação + rollout completo)** ✅
+concluída: componentes shadcn/ui-style, tokens de tema, ícones
+lucide-react, e todas as telas (autenticadas e públicas) já usam o novo
+visual. Ver detalhes na seção Frontend acima.
 
 **Fase 2 — Completar funcionalidades** (atual)
 Ideias já levantadas: feed de transações do Ethereum (via Etherscan, pede
