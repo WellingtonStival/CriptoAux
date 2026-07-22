@@ -21,9 +21,9 @@ class PriceControllerTest extends TestCase
     {
         Http::fake([
             '*' => Http::response([
-                'ethereum' => ['usd' => 3245.67, 'usd_24h_change' => 2.34],
-                'solana' => ['usd' => 145.23, 'usd_24h_change' => -1.12],
-                'bitcoin' => ['usd' => 65432.10, 'usd_24h_change' => 0.87],
+                ['id' => 'ethereum', 'current_price' => 3245.67, 'price_change_percentage_24h_in_currency' => 2.34],
+                ['id' => 'solana', 'current_price' => 145.23, 'price_change_percentage_24h_in_currency' => -1.12],
+                ['id' => 'bitcoin', 'current_price' => 65432.10, 'price_change_percentage_24h_in_currency' => 0.87],
             ]),
         ]);
 

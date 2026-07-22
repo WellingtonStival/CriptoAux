@@ -20,7 +20,7 @@ class BalanceHistoryRecorderTest extends TestCase
 
         Http::fake([
             '*' => Http::response([
-                'ethereum' => ['usd' => 1000, 'usd_24h_change' => 1],
+                ['id' => 'ethereum', 'current_price' => 1000, 'price_change_percentage_24h_in_currency' => 1],
             ]),
         ]);
     }

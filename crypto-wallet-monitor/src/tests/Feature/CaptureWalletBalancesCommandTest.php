@@ -17,7 +17,7 @@ class CaptureWalletBalancesCommandTest extends TestCase
     {
         Http::fake([
             'coingecko.com/*' => Http::response([
-                'ethereum' => ['usd' => 1000, 'usd_24h_change' => 1],
+                ['id' => 'ethereum', 'current_price' => 1000, 'price_change_percentage_24h_in_currency' => 1],
             ]),
             '*' => Http::response([
                 'jsonrpc' => '2.0',
@@ -45,7 +45,7 @@ class CaptureWalletBalancesCommandTest extends TestCase
         Http::fake([
             // cotacao (CoinGecko) sempre responde bem - so a RPC da blockchain falha
             'coingecko.com/*' => Http::response([
-                'ethereum' => ['usd' => 1000, 'usd_24h_change' => 1],
+                ['id' => 'ethereum', 'current_price' => 1000, 'price_change_percentage_24h_in_currency' => 1],
             ]),
             '*' => Http::sequence()
                 ->push(['jsonrpc' => '2.0', 'id' => 1, 'result' => '0xde0b6b3a7640000'])
