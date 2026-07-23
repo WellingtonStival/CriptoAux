@@ -32,6 +32,7 @@ import { Badge } from "../components/ui/badge";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Skeleton } from "../components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { InfoTooltip } from "../components/ui/info-tooltip";
 import { getWalletHistory, getPrices } from "../services/api";
 import { formatUsd, formatCompactUsd, formatDateTime } from "../utils/format";
 import { NETWORKS } from "../config/networks";
@@ -144,12 +145,14 @@ function WalletHistory() {
               icon={Wallet}
               label="Saldo atual"
               value={`${data.summary.current_balance ?? "--"} ${networkConfig?.symbol ?? ""}`}
+              tooltip="Quantidade da moeda nativa que essa wallet tem agora, consultada direto na blockchain."
             />
 
             <StatCard
               icon={DollarSign}
               label="Valor atual"
               value={formatUsd(data.summary.current_value_usd)}
+              tooltip="Saldo atual multiplicado pela cotação de agora, em USD."
             />
 
             <StatCard
@@ -157,12 +160,14 @@ function WalletHistory() {
               label="Variação no período"
               value={formatUsd(data.summary.change_value_usd)}
               extra={<PriceChangeBadge change={data.summary.change_percent} />}
+              tooltip="Quanto o valor em USD dessa wallet mudou desde o início do período selecionado nas abas acima."
             />
 
             <StatCard
               icon={Gauge}
               label="Mín. / Máx."
               value={`${formatUsd(data.summary.min_value_usd)} / ${formatUsd(data.summary.max_value_usd)}`}
+              tooltip="O menor e o maior valor em USD que essa wallet atingiu dentro do período selecionado."
             />
           </div>
 
@@ -229,18 +234,36 @@ function WalletHistory() {
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="size-4" />
                   Dados de mercado — {networkConfig?.label}
+                  <InfoTooltip>
+                    Indicadores gerais dessa moeda no mercado — não são
+                    específicos dessa wallet, são os mesmos pra todo mundo
+                    que tem essa moeda.
+                  </InfoTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 <div>
-                  <div className="text-xs text-muted-foreground">Market cap</div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    Market cap
+                    <InfoTooltip>
+                      Valor de mercado total da moeda: preço atual ×
+                      quantidade em circulação. Costuma ser usado como
+                      referência do "tamanho" de uma criptomoeda.
+                    </InfoTooltip>
+                  </div>
                   <div className="mt-1 text-foreground">
                     {formatCompactUsd(coinMarketData.market_cap)}
                   </div>
                 </div>
 
                 <div>
-                  <div className="text-xs text-muted-foreground">Volume 24h</div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    Volume 24h
+                    <InfoTooltip>
+                      Quanto dessa moeda foi negociado nas últimas 24 horas,
+                      somando as exchanges monitoradas pela CoinGecko.
+                    </InfoTooltip>
+                  </div>
                   <div className="mt-1 text-foreground">
                     {formatCompactUsd(coinMarketData.volume_24h)}
                   </div>
@@ -283,6 +306,12 @@ function WalletHistory() {
               <CardTitle className="flex items-center gap-2">
                 <Receipt className="size-4" />
                 Últimas transações
+                <InfoTooltip>
+                  Entradas e saídas dessa wallet direto na blockchain.
+                  Disponível hoje só pra Solana e Bitcoin — a RPC pública do
+                  Ethereum/Polygon/BNB usada pro saldo não lista
+                  transações.
+                </InfoTooltip>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -296,6 +325,11 @@ function WalletHistory() {
                 <CardTitle className="flex items-center gap-2">
                   <CandlestickChart className="size-4" />
                   Gráfico de mercado (TradingView)
+                  <InfoTooltip>
+                    Widget oficial e gratuito da TradingView, com o gráfico
+                    de candles real da moeda (par negociado na Binance) —
+                    não é um dado calculado por nós.
+                  </InfoTooltip>
                 </CardTitle>
               </CardHeader>
               <CardContent>

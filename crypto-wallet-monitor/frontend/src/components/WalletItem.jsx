@@ -27,6 +27,7 @@ import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { InfoTooltip } from "./ui/info-tooltip";
 
 const REFRESH_INTERVAL_MS = 60_000;
 
@@ -286,12 +287,15 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
               Saldo: <strong>{balance}</strong> {networkConfig.symbol}
             </span>
             {stale && (
-              <span
-                title="Não foi possível consultar a blockchain agora — mostrando o último saldo conhecido."
-                className="inline-flex items-center gap-1 text-xs text-warning"
-              >
+              <span className="inline-flex items-center gap-1 text-xs text-warning">
                 <WifiOff className="size-3" />
                 Desatualizado
+                <InfoTooltip>
+                  Não conseguimos consultar a blockchain agora (rede
+                  instável ou fora do ar) — esse é o último saldo salvo.
+                  Atualiza sozinho assim que a consulta voltar a funcionar,
+                  ou clique em "Atualizar saldo" pra tentar de novo na hora.
+                </InfoTooltip>
               </span>
             )}
           </div>
@@ -371,10 +375,17 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
           </Button>
 
           {supportsTokens && (
-            <Button variant="outline" size="sm" onClick={handleSyncTokens} disabled={syncingTokens}>
-              <Coins className={syncingTokens ? "size-3.5 animate-spin" : "size-3.5"} />
-              {syncingTokens ? "Buscando..." : "Buscar tokens"}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="sm" onClick={handleSyncTokens} disabled={syncingTokens}>
+                <Coins className={syncingTokens ? "size-3.5 animate-spin" : "size-3.5"} />
+                {syncingTokens ? "Buscando..." : "Buscar tokens"}
+              </Button>
+              <InfoTooltip>
+                Procura automaticamente qualquer token (ERC-20/SPL) que essa
+                wallet tiver — não precisa informar qual. Disponível só pra
+                Ethereum, Polygon, BNB Chain e Solana.
+              </InfoTooltip>
+            </div>
           )}
         </div>
       </CardContent>

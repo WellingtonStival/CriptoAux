@@ -143,7 +143,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (147 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (194 testes, `php artisan test`)
 - **Suporte a tokens/ativos (2026-07-23)**: além do saldo nativo, o
   sistema agora rastreia tokens dentro de uma wallet (ERC-20 no
   Ethereum, SPL na Solana — Bitcoin não suporta). Duas tabelas novas:
@@ -492,6 +492,90 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   ponta em 2026-07-22**: `DEEPL_API_KEY` configurada no `.env` local,
   `/api/news` retorna título e resumo já traduzidos pra PT-BR, conferido
   também na tela `/noticias` no navegador.
+- **Sentimento de mercado (2026-07-23)**: três indicadores gerais do
+  mercado cripto (não são sobre a carteira do usuário, são contexto de
+  mercado), cada um em seu próprio serviço:
+  - `App\Services\Market\FearGreedService` — Fear & Greed Index via
+    `api.alternative.me/fng/`, API **pública e gratuita, sem chave**
+    (verificado ao vivo antes de implementar). Atualiza 1x/dia, cache de
+    1h. `current()` (valor + classificação, traduzida pra PT-BR) e
+    `history($days)` (histórico, `$days=0` = tudo, ~3100 pontos desde
+    2018).
+  - `App\Services\Market\GlobalMarketService` — dominância do Bitcoin/
+    Ethereum e market cap total via `/global` da CoinGecko (mesmo
+    fornecedor já usado, endpoint funciona mesmo sem `COINGECKO_API_KEY`).
+  - `App\Services\Market\AltcoinSeasonService` — **não existe API
+    gratuita pro Altcoin Season Index** oficial (blockchaincenter.net/
+    CoinMarketCap é proprietário, verificado antes de tentar) — calculamos
+    uma aproximação própria: % das top 50 moedas (exceto stablecoins e
+    ativos wrapped/staked, lista `EXCLUDED_SYMBOLS`) que subiram mais que
+    o Bitcoin nos últimos 30 dias. ⚠️ **Diferença de metodologia
+    assumida conscientemente**: o índice "oficial" usa janela de 90
+    dias; a CoinGecko não tem variação de 90d pronta em `/coins/markets`
+    (só 1h/24h/7d/14d/30d/200d/1y) e replicar os 90d exigiria uma
+    chamada por moeda. Usamos 30d como proxy — mesma ideia, número pode
+    diferir do que a CoinMarketCap mostra. O campo `methodology` na
+    resposta da API deixa isso explícito pro frontend exibir.
+  `GET /api/market/overview` (os 3 snapshots atuais, cada indicador
+  falha independente — se um vendor cair, os outros continuam) e
+  `GET /api/market/fear-greed/history?period=30d|1y|all` (só o F&G tem
+  gráfico histórico por enquanto).
+- **Alertas via Telegram (2026-07-23)**: primeira funcionalidade "ativa"
+  do sistema — até aqui tudo era o usuário abrir a tela pra ver dado;
+  alerta é o sistema avisando sem precisar abrir nada. Canal escolhido
+  foi Telegram (gratuito, API simples, sem custo por mensagem).
+  **Conexão de conta**: fluxo de deep-link automático (não pedimos pro
+  usuário colar o próprio chat ID manualmente, que seria mais simples
+  de implementar mas mais fricção pro usuário) — `POST
+  /api/telegram/link-code` gera um código aleatório salvo em
+  `users.telegram_link_code` e devolve um link
+  `https://t.me/{bot}?start={codigo}`; o usuário clica, abre o Telegram
+  e manda "Iniciar" pro bot. Como não temos uma URL pública estável em
+  dev (o túnel Cloudflare muda a cada sessão), **não usamos webhook** -
+  o comando `telegram:poll` (rodando no scheduler a cada minuto) faz
+  long-polling em `getUpdates`, casa o código da mensagem `/start
+  <codigo>` com o usuário certo, salva `telegram_chat_id` e confirma
+  por mensagem. `frontend/src/pages/Alerts.jsx` faz polling do proprio
+  `GET /telegram/status` a cada 3s depois de clicar "Conectar" pra
+  detectar a conclusão sem precisar recarregar a página. ✅ **Testado
+  ao vivo em 2026-07-23** com bot real do Wellington
+  (@ReportsNexfolioCrypt_bot): conexão automática funcionou, e um
+  disparo de teste (`AlertEvaluationService::checkWalletBalanceDrop()`
+  chamado manualmente) chegou de verdade no Telegram dele.
+  **Três tipos de alerta** (`alert_rules.type`), cada um com um caminho
+  de avaliação diferente porque nenhum dos três tem o mesmo "momento
+  natural" de disparo:
+  - `wallet_balance_drop`: avaliado em tempo real dentro de
+    `BalanceHistoryRecorder::capture()`, comparando o snapshot novo com
+    o anterior da mesma wallet - reaproveita a captura de saldo que já
+    existe (síncrona no `WalletBalanceController::show()` e na
+    `RefreshWalletBalance` job), sem pipeline novo. Compara **saldo
+    nativo** (quantidade), não valor em USD, de propósito - é um alerta
+    de segurança (será que alguém moveu meus fundos?), não de mercado;
+    queda de preço não deve disparar isso.
+  - `portfolio_change` e `price_change`: não dependem de uma wallet só
+    (patrimônio soma todas; preço não depende de nenhuma) - avaliados
+    pelo comando agendado `alerts:evaluate` (a cada 15 min).
+    `portfolio_change` compara o valor total agora com o valor de ~24h
+    atrás (snapshot mais recente até aquele instante, mesma lógica de
+    "ultimo por wallet" do `PortfolioController`, reescrita à parte pra
+    não arriscar mexer num endpoint já testado). `price_change`
+    reaproveita `PriceService::current()['change_24h']` que a CoinGecko
+    já calcula - nenhum cálculo próprio pra esse.
+  **Anti-spam**: cada regra guarda `last_triggered_at` e só dispara de
+  novo depois de 6h (`AlertEvaluationService::DEBOUNCE_HOURS`), mesmo
+  que a condição continue verdadeira em avaliações seguintes.
+  ⚠️ **Bug real pego ao testar ao vivo**: `AlertController::store()`
+  criava a regra sem passar `is_active` explicitamente (contando com o
+  default `true` da coluna no banco) - mas o objeto Eloquent recém-criado
+  em memória não reflete um default de banco que não foi passado no
+  `create()`, só a próxima leitura do banco reflete. Resultado: a API
+  respondia `is_active: null` pro alerta recém-criado, e a tela mostrava
+  ele como "pausado" mesmo estando ativo de verdade no banco. Só
+  apareceu testando a criação de alerta pela tela de verdade, não nos
+  testes automatizados (que já criavam a regra direto via
+  `AlertRule::create()` e reconferiam depois, mascarando o problema).
+  Corrigido passando `is_active: true` explicitamente no `create()`.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -565,6 +649,20 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   card "Concentração" (por moeda e por wallet, com nível colorido).
   `Layout.jsx` ganhou navegação entre as telas ("Dashboard" / "Minhas
   Wallets" / "Ativos" / "Notícias").
+- **Insights v1 (2026-07-23)**: card "Insights" no topo do Dashboard,
+  acima dos indicadores numéricos — traduz os mesmos dados que já
+  existem (`summary`/`allocation`/`concentration` de
+  `GET /api/portfolio/history`) em frases curtas (ex: "Seu patrimônio
+  subiu 5.2% nos últimos 7 dias", "Concentração alta: 80% do seu
+  patrimônio está em Ethereum"). Implementado só no frontend
+  (`frontend/src/utils/insights.js`, função pura `generateInsights()`)
+  — não é cálculo novo, só apresentação do que a API já retorna, por
+  isso não precisou de endpoint próprio nem migration. Até 4 frases por
+  vez: variação no período, concentração por rede, concentração por
+  wallet (só se disser algo que a de rede ainda não disse — evita duas
+  frases quase idênticas quando o usuário tem 1 wallet por rede) e
+  proximidade da máxima do período. Sem dados suficientes (`points`
+  vazio), o card simplesmente não aparece.
 - **Ativos** (`Assets.jsx`, `/ativos`) — redesenhada em 2026-07-23: visão
   consolidada de todos os tokens de todas as wallets, somando o mesmo
   token quando aparece em mais de uma (`GET /api/assets`). Cards de
@@ -612,6 +710,38 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   o 403 de conta não confirmada com um botão de reenviar ali mesmo.
   `VerifyEmail.jsx` (`/verificar-email`) lê `token`/`email` da URL,
   confirma, loga automaticamente e redireciona pro Dashboard.
+- **Mercado** (`Market.jsx`, `/mercado`) — nova em 2026-07-23: grid de
+  "cards de indicador" pensado pra crescer (mais métricas depois sem
+  redesenhar nada) com os 3 indicadores de `GET /api/market/overview`.
+  `FearGreedGauge.jsx` é um medidor semicircular em SVG puro (sem lib de
+  gráfico) — trilha cinza neutra + arco preenchido colorido por status
+  (vermelho/laranja/amarelo/verde-claro/verde conforme a faixa do
+  valor), mesmo padrão de "cor por status" já usado no card de
+  Concentração do Dashboard, não uma paleta categórica nova. Abaixo dos
+  cards, gráfico de linha do histórico do Fear & Greed (Recharts, mesmo
+  padrão visual do gráfico de evolução do Dashboard) com seletor de
+  período (30 dias/1 ano/tudo).
+- **Tooltips de ajuda "?" (2026-07-23)**: `ui/info-tooltip.jsx`
+  (`InfoTooltip`) — ícone "?" pequeno que abre uma explicação curta ao
+  **clicar** (não hover, de propósito — hover não existe em touch/
+  mobile). Usa `@radix-ui/react-popover` (pacote novo, mesma família já
+  usada pro `Tabs`). Aplicado nos itens que exigem conhecimento prévio
+  de cripto/finanças pra entender (HHI/Concentração, Fear & Greed,
+  Dominância do Bitcoin, Altcoin Season, badge "Desatualizado", botão
+  "Buscar tokens", Market cap/Volume) espalhados por Dashboard, Wallets,
+  WalletHistory, Assets e Market — itens óbvios (ex: "Saldo") não
+  ganharam tooltip pra não virar ruído visual. Testado em viewport
+  mobile (375px): texto quebra bem, não estoura a tela.
+- **Alertas** (`Alerts.jsx`, `/alertas`) — nova em 2026-07-23: card de
+  conexão do Telegram (mostra "Conectar" ou "Conectado ✓" conforme
+  `GET /telegram/status`; ao clicar "Conectar", abre o deep-link numa
+  aba nova e faz polling do próprio status a cada 3s por até 2 minutos
+  pra detectar a conclusão sem exigir recarregar a página), formulário
+  de novo alerta (campos mudam conforme o tipo escolhido — wallet só
+  aparece pra "queda de saldo", moeda só pra "variação de preço") e
+  lista dos alertas já criados com botão de pausar/ativar e remover.
+  Formulário e lista só aparecem depois do Telegram conectado (sem
+  canal configurado, não tem pra onde mandar alerta).
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -752,14 +882,42 @@ tudo do Ethereum) em vez de blockchains independentes (Cardano, Tron,
 Hyperliquid, Kaspa — cada uma exigiria integração e pesquisa de
 fornecedor do zero, esforço bem maior).
 
+**Fase 3.0 — Redesign da tela Ativos + correção de preço de token** ✅
+concluída: ver detalhes na seção Backend/Frontend acima ("Preço de
+token limitado..." e "Ativos — redesenhada em 2026-07-23"). Chave da
+CoinGecko configurada e testada ao vivo (0 → 25 de 373 tokens com
+preço).
+
+**Fase 3.1 — Insights v1** ✅ concluída: ver detalhes na seção Frontend
+acima. Só frontend, sem endpoint novo — reaproveita dado que já existia.
+
+**Fase 3.2 — Sentimento de mercado (Fear & Greed, dominância, Altcoin
+Season)** ✅ concluída: ver detalhes na seção Backend/Frontend acima.
+Ideia trazida pelo Wellington (2026-07-23), inspirada na tela de F&G da
+CoinMarketCap. Decisão consciente de escopo: Fear & Greed e dominância
+usam dado oficial de fornecedor gratuito; Altcoin Season é aproximação
+própria (30d) por não existir API gratuita pro índice oficial (90d) —
+rotulado explicitamente no `methodology` da resposta, não apresentado
+como se fosse o número exato da CMC.
+
+**Fase 3.3 — Alertas via Telegram** ✅ concluída: ver detalhes na seção
+Backend/Frontend acima. Primeira funcionalidade "ativa" do sistema (avisa
+sem precisar abrir a tela). Três tipos (queda de saldo por wallet,
+variação de patrimônio total, variação de preço de moeda), conexão de
+conta por deep-link + polling (sem depender de webhook público, que não
+temos em dev). Testado ao vivo com o bot real do Wellington
+(@ReportsNexfolioCrypt_bot) — conexão e disparo de alerta chegaram de
+verdade no Telegram dele.
+
 **Fase 2 — Completar funcionalidades** (atual)
-Fases A, B de confiabilidade, suporte a tokens e mais blockchains EVM
-concluídos (2026-07-23). Próximos candidatos, combinados com o
-Wellington: Insights v1 (frases a partir de métricas que já existem, ex:
-concentração/variação) → feed de transações do Ethereum (via Etherscan,
-pede chave de API) → blockchains independentes (Cardano, Tron,
-Hyperliquid, Kaspa) → alertas de variação/movimentação. Perguntar ao
-Wellington a prioridade antes de escolher a próxima.
+Fases A, B de confiabilidade, suporte a tokens, mais blockchains EVM,
+redesign de Ativos, Insights v1, sentimento de mercado e alertas via
+Telegram concluídos (2026-07-23). Próximos candidatos, combinados com o
+Wellington: feed de transações do Ethereum (via Etherscan, pede chave de
+API) → blockchains independentes (Cardano, Tron, Hyperliquid, Kaspa) →
+mais tipos de alerta (ex: aprovações de contrato arriscadas) → notificação
+por email como canal alternativo ao Telegram. Perguntar ao Wellington a
+prioridade antes de escolher a próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)

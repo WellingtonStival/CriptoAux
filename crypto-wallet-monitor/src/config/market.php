@@ -16,4 +16,14 @@ return [
          */
         'api_key' => env('COINGECKO_API_KEY'),
     ],
+
+    /*
+     * Fear & Greed Index - API publica e gratuita, sem chave, mantida
+     * pela Alternative.me. E o indice classico usado por praticamente
+     * todo app de cripto (verificado ao vivo em 2026-07-23). Atualiza
+     * 1x por dia.
+     */
+    'fear_greed' => [
+        'base_url' => env('FEAR_GREED_API_URL', 'https://api.alternative.me/fng/'),
+    ],
 ];

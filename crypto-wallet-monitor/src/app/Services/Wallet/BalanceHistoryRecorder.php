@@ -4,6 +4,7 @@ namespace App\Services\Wallet;
 
 use App\Models\Wallet;
 use App\Models\WalletBalanceHistory;
+use App\Services\Alerts\AlertEvaluationService;
 use App\Services\Market\PriceService;
 
 class BalanceHistoryRecorder
@@ -18,6 +19,7 @@ class BalanceHistoryRecorder
 
     public function __construct(
         private PriceService $priceService,
+        private AlertEvaluationService $alertEvaluator,
     ) {
     }
 
@@ -39,12 +41,18 @@ class BalanceHistoryRecorder
         $prices = $this->priceService->current();
         $priceUsd = $prices[$wallet->network]['usd'] ?? null;
 
-        return WalletBalanceHistory::create([
+        $snapshot = WalletBalanceHistory::create([
             'wallet_id' => $wallet->id,
             'network' => $wallet->network,
             'balance' => $balance,
             'price_usd' => $priceUsd,
             'captured_at' => now(),
         ]);
+
+        if ($lastCapture) {
+            $this->alertEvaluator->checkWalletBalanceDrop($wallet, $lastCapture->balance, $balance);
+        }
+
+        return $snapshot;
     }
 }

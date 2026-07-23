@@ -2,6 +2,8 @@ import { Routes, Route } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
 import Dashboard from "./pages/Dashboard";
 import Assets from "./pages/Assets";
+import Market from "./pages/Market";
+import Alerts from "./pages/Alerts";
 import News from "./pages/News";
 import Wallets from "./pages/Wallets";
 import WalletHistory from "./pages/WalletHistory";
@@ -43,6 +45,24 @@ function App() {
         element={
           <PrivateRoute>
             <Assets />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/mercado"
+        element={
+          <PrivateRoute>
+            <Market />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/alertas"
+        element={
+          <PrivateRoute>
+            <Alerts />
           </PrivateRoute>
         }
       />

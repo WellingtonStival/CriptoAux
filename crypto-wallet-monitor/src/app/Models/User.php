@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use App\Models\Wallet;
+use App\Models\AlertRule;
 use App\Notifications\ResetPasswordNotification;
 use App\Notifications\VerifyEmailNotification;
 use Illuminate\Support\Facades\Hash;
@@ -39,6 +40,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'telegram_chat_id',
+        'telegram_link_code',
     ];
 
     /**
@@ -57,6 +60,16 @@ class User extends Authenticatable
 	public function wallets()
 	{
 		return $this->hasMany(Wallet::class);
+	}
+
+	public function alertRules()
+	{
+		return $this->hasMany(AlertRule::class);
+	}
+
+	public function hasTelegramLinked(): bool
+	{
+		return $this->telegram_chat_id !== null;
 	}
 
 	/**

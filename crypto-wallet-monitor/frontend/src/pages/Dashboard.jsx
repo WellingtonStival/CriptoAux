@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   LineChart,
@@ -17,9 +17,11 @@ import {
   ArrowDownToLine,
   ArrowUpToLine,
   AlertCircle,
+  AlertTriangle,
   Inbox,
   PieChart,
   Layers,
+  Lightbulb,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
@@ -31,9 +33,25 @@ import { Badge } from "../components/ui/badge";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Skeleton } from "../components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { InfoTooltip } from "../components/ui/info-tooltip";
 import { getPortfolioHistory, getPrices } from "../services/api";
 import { formatUsd, formatDateTime } from "../utils/format";
+import { generateInsights } from "../utils/insights";
 import { NETWORKS } from "../config/networks";
+
+const INSIGHT_ICONS = {
+  positive: TrendingUp,
+  negative: TrendingDown,
+  warning: AlertTriangle,
+  neutral: Lightbulb,
+};
+
+const INSIGHT_COLORS = {
+  positive: "text-success",
+  negative: "text-destructive",
+  warning: "text-warning",
+  neutral: "text-muted-foreground",
+};
 
 const PERIODS = [
   { value: "24h", label: "24h" },
@@ -92,6 +110,7 @@ function Dashboard() {
   }));
 
   const isPositiveChange = (data?.summary.change_value_usd ?? 0) >= 0;
+  const insights = useMemo(() => generateInsights(data), [data]);
 
   return (
     <Layout>
@@ -147,11 +166,43 @@ function Dashboard() {
             </Card>
           ) : (
             <>
+              {insights.length > 0 && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Lightbulb className="size-4" />
+                      Insights
+                      <InfoTooltip>
+                        Frases geradas automaticamente a partir dos seus
+                        próprios dados (variação, concentração) — não são
+                        recomendação de investimento, só uma leitura rápida
+                        do que já está nos números abaixo.
+                      </InfoTooltip>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="flex flex-col gap-2.5">
+                      {insights.map((insight, index) => {
+                        const Icon = INSIGHT_ICONS[insight.tone] ?? Lightbulb;
+
+                        return (
+                          <li key={index} className="flex items-start gap-2 text-sm">
+                            <Icon className={`mt-0.5 size-4 shrink-0 ${INSIGHT_COLORS[insight.tone]}`} />
+                            <span className="text-foreground">{insight.text}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatCard
                   icon={DollarSign}
                   label="Valor atual"
                   value={formatUsd(data.summary.current_value_usd)}
+                  tooltip="Soma do saldo de todas as suas wallets, convertido pra USD usando a cotação atual de cada moeda."
                 />
 
                 <StatCard
@@ -159,18 +210,21 @@ function Dashboard() {
                   label="Variação no período"
                   value={formatUsd(data.summary.change_value_usd)}
                   extra={<PriceChangeBadge change={data.summary.change_percent} />}
+                  tooltip="Quanto o valor total mudou desde o início do período selecionado nas abas acima (24h, 7 dias, 30 dias ou tudo)."
                 />
 
                 <StatCard
                   icon={ArrowDownToLine}
                   label="Mínimo"
                   value={formatUsd(data.summary.min_value_usd)}
+                  tooltip="O menor valor que seu patrimônio total atingiu dentro do período selecionado."
                 />
 
                 <StatCard
                   icon={ArrowUpToLine}
                   label="Máximo"
                   value={formatUsd(data.summary.max_value_usd)}
+                  tooltip="O maior valor que seu patrimônio total atingiu dentro do período selecionado."
                 />
               </div>
 
@@ -235,6 +289,12 @@ function Dashboard() {
                     <CardTitle className="flex items-center gap-2">
                       <PieChart className="size-4" />
                       Distribuição por moeda
+                      <InfoTooltip>
+                        Quanto do seu patrimônio está em cada blockchain, com
+                        base no último saldo registrado de cada wallet
+                        (independente do período selecionado no gráfico
+                        acima).
+                      </InfoTooltip>
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
@@ -281,6 +341,17 @@ function Dashboard() {
                     <CardTitle className="flex items-center gap-2">
                       <Layers className="size-4" />
                       Concentração
+                      <InfoTooltip>
+                        Usa o índice HHI (Herfindahl-Hirschman): soma o
+                        quadrado do percentual de cada posição — quanto mais
+                        perto de 100% estiver concentrado num só lugar, maior
+                        o índice. Abaixo de 1.500 é "diversificado", entre
+                        1.500 e 2.500 é "moderado", acima de 2.500 é
+                        "concentrado". É o mesmo índice usado até em análise
+                        antitruste pra medir concentração de mercado. Não é
+                        recomendação de investimento, só um fato sobre a
+                        distribuição.
+                      </InfoTooltip>
                     </CardTitle>
                     <CardDescription>
                       O quanto seu patrimônio está espalhado entre moedas e

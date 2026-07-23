@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, Coins, Newspaper, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, Coins, Newspaper, Gauge, BellRing, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -10,6 +10,8 @@ const NAV_LINKS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/wallets", label: "Minhas Wallets", icon: Wallet },
   { to: "/ativos", label: "Ativos", icon: Coins },
+  { to: "/mercado", label: "Mercado", icon: Gauge },
+  { to: "/alertas", label: "Alertas", icon: BellRing },
   { to: "/noticias", label: "Notícias", icon: Newspaper },
 ];
 

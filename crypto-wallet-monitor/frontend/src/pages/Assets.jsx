@@ -21,6 +21,7 @@ import { Skeleton } from "../components/ui/skeleton";
 import { Input } from "../components/ui/input";
 import { Select } from "../components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { InfoTooltip } from "../components/ui/info-tooltip";
 
 const NETWORK_FILTERS = [
   { value: "all", label: "Todas" },
@@ -209,17 +210,29 @@ function Assets() {
 
       {!loading && !error && assets.length > 0 && (
         <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard icon={Wallet} label="Valor total" value={formatUsd(totalValue)} />
-          <StatCard icon={Coins} label="Ativos com preço" value={priced.length} />
+          <StatCard
+            icon={Wallet}
+            label="Valor total"
+            value={formatUsd(totalValue)}
+            tooltip="Soma do valor (saldo × preço) de todos os tokens que têm cotação disponível."
+          />
+          <StatCard
+            icon={Coins}
+            label="Ativos com preço"
+            value={priced.length}
+            tooltip="Quantos tokens diferentes têm cotação encontrada na CoinGecko."
+          />
           <StatCard
             icon={ShieldQuestion}
             label="Sem preço"
             value={assets.filter((a) => a.value_usd === null).length}
+            tooltip="Tokens sem cotação na CoinGecko — geralmente muito novos, sem liquidez, ou spam enviado sem você pedir. Veja a seção colapsada abaixo da lista."
           />
           <StatCard
             icon={Wallet}
             label="Total rastreado"
             value={assets.length}
+            tooltip="Todos os tokens já descobertos em qualquer uma das suas wallets, com ou sem preço."
           />
         </div>
       )}
@@ -302,7 +315,10 @@ function Assets() {
                 <span>Ativo</span>
                 <span className="text-right">Saldo</span>
                 <span className="text-right">Preço</span>
-                <span className="text-right">Valor</span>
+                <span className="flex items-center justify-end gap-1">
+                  Valor
+                  <InfoTooltip>Saldo × preço, e o quanto isso representa do seu valor total em ativos.</InfoTooltip>
+                </span>
               </div>
               <div className="divide-y divide-border">
                 {priced.map((asset) => (

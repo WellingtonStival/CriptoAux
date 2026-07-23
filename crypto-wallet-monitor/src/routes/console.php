@@ -9,3 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('wallets:capture-balances')->hourly();
+Schedule::command('telegram:poll')->everyMinute();
+Schedule::command('alerts:evaluate')->everyFifteenMinutes();

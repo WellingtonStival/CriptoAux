@@ -102,6 +102,50 @@ export function deleteWalletToken(walletId, tokenId) {
 }
 
 /* =========================
+   MERCADO
+========================= */
+
+export function getMarketOverview() {
+  return api.get('/market/overview');
+}
+
+export function getFearGreedHistory(period) {
+  return api.get('/market/fear-greed/history', { params: { period } });
+}
+
+/* =========================
+   ALERTAS / TELEGRAM
+========================= */
+
+export function getTelegramStatus() {
+  return api.get('/telegram/status');
+}
+
+export function generateTelegramLinkCode() {
+  return api.post('/telegram/link-code');
+}
+
+export function unlinkTelegram() {
+  return api.post('/telegram/unlink');
+}
+
+export function getAlerts() {
+  return api.get('/alerts');
+}
+
+export function createAlert(data) {
+  return api.post('/alerts', data);
+}
+
+export function updateAlert(id, data) {
+  return api.patch(`/alerts/${id}`, data);
+}
+
+export function deleteAlert(id) {
+  return api.delete(`/alerts/${id}`);
+}
+
+/* =========================
    SENHA
 ========================= */
 

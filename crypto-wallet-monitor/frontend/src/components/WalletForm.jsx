@@ -7,6 +7,7 @@ import { Label } from "./ui/label";
 import { Select } from "./ui/select";
 import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
+import { InfoTooltip } from "./ui/info-tooltip";
 
 const ADDRESS_PATTERNS = {
   ethereum: /^0x[a-fA-F0-9]{40}$/,
@@ -74,7 +75,15 @@ function WalletForm({ onCreated }) {
         <form onSubmit={handleSubmit}>
           <div className="flex gap-2">
             <div className="w-36 shrink-0">
-              <Label htmlFor="wallet-network">Blockchain</Label>
+              <Label htmlFor="wallet-network" className="flex items-center gap-1">
+                Blockchain
+                <InfoTooltip>
+                  A rede onde essa carteira existe. Define o formato do
+                  endereço esperado e quais recursos ficam disponíveis (ex:
+                  busca de tokens só funciona em Ethereum, Polygon, BNB
+                  Chain e Solana).
+                </InfoTooltip>
+              </Label>
 
               <Select
                 id="wallet-network"

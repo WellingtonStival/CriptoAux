@@ -20,3 +20,13 @@ export function formatDateTime(iso) {
     minute: "2-digit",
   });
 }
+
+export function formatDate(iso) {
+  if (!iso) return "--";
+  return new Date(iso).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+}

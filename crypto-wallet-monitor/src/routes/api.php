@@ -13,6 +13,9 @@ use App\Http\Controllers\PriceController;
 use App\Http\Controllers\NewsController;
 use App\Http\Controllers\WalletTokenController;
 use App\Http\Controllers\AssetsController;
+use App\Http\Controllers\MarketController;
+use App\Http\Controllers\TelegramController;
+use App\Http\Controllers\AlertController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -34,6 +37,15 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/wallets/{id}/tokens', [WalletTokenController::class, 'index']);
     Route::post('/wallets/{id}/tokens/sync', [WalletTokenController::class, 'sync']);
     Route::delete('/wallets/{id}/tokens/{tokenId}', [WalletTokenController::class, 'destroy']);
+    Route::get('/market/overview', [MarketController::class, 'overview']);
+    Route::get('/market/fear-greed/history', [MarketController::class, 'fearGreedHistory']);
+    Route::get('/telegram/status', [TelegramController::class, 'status']);
+    Route::post('/telegram/link-code', [TelegramController::class, 'generateLinkCode']);
+    Route::post('/telegram/unlink', [TelegramController::class, 'unlink']);
+    Route::get('/alerts', [AlertController::class, 'index']);
+    Route::post('/alerts', [AlertController::class, 'store']);
+    Route::patch('/alerts/{id}', [AlertController::class, 'update']);
+    Route::delete('/alerts/{id}', [AlertController::class, 'destroy']);
 });
 
 Route::middleware('auth:sanctum')->get(
