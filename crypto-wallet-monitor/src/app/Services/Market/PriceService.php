@@ -151,6 +151,49 @@ class PriceService
     }
 
     /**
+     * Variacao percentual do preco de uma moeda entre o inicio e o fim de
+     * uma janela de tempo (usado pro comparativo "voce vs. Bitcoin" no
+     * Dashboard - mas generico, funciona pra qualquer rede suportada).
+     * $days aceita um numero de dias ou "max" (todo o historico
+     * disponivel), mesmo parametro aceito pela CoinGecko.
+     */
+    public function historicalChangePercent(string $network, string $days): ?float
+    {
+        $coinId = self::COINGECKO_COIN_IDS[$network] ?? $network;
+        $cacheKey = "historical_change:{$network}:{$days}";
+
+        return Cache::remember($cacheKey, now()->addMinutes(30), function () use ($coinId, $network, $days) {
+            $response = $this->http(10)->get(
+                config('market.coingecko.base_url') . "/coins/{$coinId}/market_chart",
+                ['vs_currency' => 'usd', 'days' => $days]
+            );
+
+            if (!$response->successful()) {
+                Log::warning('Falha ao consultar historico de preco CoinGecko', [
+                    'network' => $network,
+                    'status' => $response->status(),
+                ]);
+                return null;
+            }
+
+            $prices = $response->json('prices') ?? [];
+
+            if (count($prices) < 2) {
+                return null;
+            }
+
+            $first = $prices[0][1];
+            $last = end($prices)[1];
+
+            if ($first <= 0) {
+                return null;
+            }
+
+            return (($last - $first) / $first) * 100;
+        });
+    }
+
+    /**
      * @param array<int, string> $contractAddresses
      * @return array<string, float>
      */

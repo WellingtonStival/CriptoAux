@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\WalletBalanceHistory;
+use App\Services\Market\PriceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
@@ -13,6 +14,20 @@ class PortfolioController extends Controller
         '7d' => ['days' => 7, 'bucket' => 'hour'],
         '30d' => ['days' => 30, 'bucket' => 'day'],
     ];
+
+    /**
+     * Mesmos periodos acima, mas no formato que a CoinGecko espera pro
+     * historico de preco (numero de dias, ou "max" pra tudo).
+     */
+    private const COINGECKO_DAYS = [
+        '24h' => '1',
+        '7d' => '7',
+        '30d' => '30',
+    ];
+
+    public function __construct(private PriceService $priceService)
+    {
+    }
 
     /**
      * Agrega o historico de saldo de todas as wallets do usuario num unico
@@ -98,7 +113,35 @@ class PortfolioController extends Controller
                 'by_network' => $this->networkConcentration($networkTotals, $currentValueUsd),
                 'by_wallet' => $this->walletConcentration($walletTotals, $currentValueUsd, $wallets),
             ],
+            'benchmark' => $this->bitcoinBenchmark($period, $first),
         ]);
+    }
+
+    /**
+     * "E se todo o seu patrimonio inicial do periodo tivesse ficado 100%
+     * em Bitcoin?" - complementa o indice HHI de concentracao com um
+     * numero concreto em USD, em vez de so um indice abstrato. So faz
+     * sentido com um ponto inicial de verdade (senao nao ha valor pra
+     * projetar); se a CoinGecko falhar, retorna null e o frontend
+     * simplesmente nao mostra o card - nao quebra o resto da tela.
+     */
+    private function bitcoinBenchmark(string $period, ?array $firstPoint): ?array
+    {
+        if (!$firstPoint || $firstPoint['value_usd'] <= 0) {
+            return null;
+        }
+
+        $days = self::COINGECKO_DAYS[$period] ?? 'max';
+        $btcChangePercent = $this->priceService->historicalChangePercent('bitcoin', $days);
+
+        if ($btcChangePercent === null) {
+            return null;
+        }
+
+        return [
+            'btc_change_percent' => $btcChangePercent,
+            'hypothetical_value_usd' => $firstPoint['value_usd'] * (1 + $btcChangePercent / 100),
+        ];
     }
 
     /**

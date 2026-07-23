@@ -17,6 +17,7 @@ use App\Http\Controllers\MarketController;
 use App\Http\Controllers\TelegramController;
 use App\Http\Controllers\AlertController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\SecurityController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -51,6 +52,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/account', [AccountController::class, 'update']);
     Route::post('/account/password', [AccountController::class, 'updatePassword']);
     Route::delete('/account', [AccountController::class, 'destroy']);
+    Route::get('/security/approvals', [SecurityController::class, 'approvals']);
 });
 
 Route::middleware('auth:sanctum')->get(

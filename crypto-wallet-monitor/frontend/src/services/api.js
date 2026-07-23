@@ -166,6 +166,14 @@ export function deleteAccount(password) {
 }
 
 /* =========================
+   SEGURANÇA
+========================= */
+
+export function getSecurityApprovals() {
+  return api.get('/security/approvals');
+}
+
+/* =========================
    SENHA
 ========================= */
 

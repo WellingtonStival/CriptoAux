@@ -143,7 +143,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (203 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (216 testes, `php artisan test`)
 - **Suporte a tokens/ativos (2026-07-23)**: além do saldo nativo, o
   sistema agora rastreia tokens dentro de uma wallet (ERC-20 no
   Ethereum, SPL na Solana — Bitcoin não suporta). Duas tabelas novas:
@@ -596,6 +596,41 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   ✅ **Testado ao vivo em 2026-07-23** numa conta descartável real:
   senha errada bloqueia corretamente, senha certa exclui e desloga
   (redireciona pro login), registro some do banco.
+- **Comparativo "Você vs. Bitcoin" (2026-07-23)**: `PortfolioController::history()`
+  ganhou o campo `benchmark` — responde "e se todo o seu patrimônio do
+  início do período tivesse ficado 100% em Bitcoin?" com um valor
+  concreto em USD, complementando o índice HHI de concentração (que é
+  abstrato) com um número direto. Usa `PriceService::historicalChangePercent()`
+  (novo método, `/coins/{id}/market_chart` da CoinGecko, mesmo fornecedor
+  já usado) pra pegar a variação do BTC no mesmo período selecionado no
+  gráfico. Sem ponto inicial de patrimônio (`points` vazio), o campo
+  `benchmark` vem `null` e o frontend simplesmente não mostra o card.
+  ⚠️ **Gotcha pego escrevendo os testes**: os testes existentes do
+  `PortfolioControllerTest` não mockavam HTTP nenhum antes — ao adicionar
+  essa chamada de rede dentro de `history()`, os testes passaram a bater
+  na CoinGecko de verdade (perceptível pelo tempo de execução subindo).
+  Corrigido adicionando `Http::fake()` no `setUp()` da classe de teste.
+- **Scanner de aprovações arriscadas (2026-07-23)**: `ApprovalScanService`
+  lista as aprovações de token (ERC-20 `approve`/`allowance`) que uma
+  wallet já concedeu a contratos — o principal vetor de wallets sendo
+  esvaziadas por golpe (aprovação "ilimitada" pra um contrato malicioso).
+  Fonte: **GoPlus Security API**, pública e **gratuita, sem chave**
+  (verificado ao vivo antes de implementar, com uma wallet real — a
+  documentação oficial dizia que precisava de chave, mas o teste ao vivo
+  mostrou que não). Só EVM (Ethereum/Polygon/BNB via `chain_id` 1/137/56)
+  — Solana usa um mecanismo de "delegate" diferente, sem suporte ainda.
+  Classificação de risco (`alta`/`media`/`baixa`): `alta` se o contrato
+  está marcado como malicioso pela própria GoPlus OU se a aprovação é
+  ilimitada pra um contrato **não open source**; `media` se ilimitada
+  mas pra contrato open source; `baixa` pra aprovações de valor limitado.
+  Puramente sob demanda — não persiste nada no banco (mesmo padrão do
+  "Buscar tokens": ação mais pesada, só roda quando o usuário pede),
+  cache de 10 min por wallet. `GET /api/security/approvals` agrega todas
+  as wallets EVM do usuário numa lista só, ordenada por risco.
+  ✅ **Testado ao vivo em 2026-07-23** com as wallets reais do Wellington:
+  achou 5 aprovações reais na wallet BNB (incluindo uma ilimitada pra um
+  contrato de "Bridge" open source, classificada corretamente como risco
+  médio) — nenhuma de risco alto nessas wallets de teste.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -625,7 +660,29 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   `Label`, `Select` (wrapper estilizado do `<select>` nativo — não usa
   Radix Select, simplicidade > customização nesse caso). Testado no
   navegador tela por tela, lint limpo.
-- `Layout.jsx` — cabeçalho + logout, envolve as páginas autenticadas
+- **Navegação em sidebar (2026-07-23)**: `Layout.jsx` deixou de usar uma
+  barra horizontal no topo — virou uma sidebar fixa à esquerda (~256px,
+  desktop), com os 7 itens de navegação em lista vertical e uma área
+  fixada embaixo com "Minha Conta" + "Sair" (antes dividiam espaço
+  horizontal com o header, que já estava apertado com 7 destinos +
+  ícone de conta + botão sair). Motivo: sidebar é o padrão dominante em
+  dashboards SaaS atuais (Linear, Vercel, Stripe, Notion) e escala
+  melhor que nav horizontal conforme a quantidade de telas cresce —
+  primeira etapa de um pedido maior do Wellington de modernizar a
+  aparência do sistema como um todo (próxima etapa combinada: página de
+  apresentação/landing para visitantes não autenticados, que hoje não
+  existe — `PrivateRoute` redireta qualquer rota sem sessão direto pra
+  `/login`). Em mobile (viewport `lg:` do Tailwind, abaixo de 1024px), a
+  sidebar vira um painel deslizante fora da tela, aberto por um botão
+  hambúrguer numa barra fina no topo — fecha sozinho ao clicar num item
+  de navegação (`onClick` em cada link chama `setMobileOpen(false)`,
+  não um `useEffect` reagindo à rota — a primeira versão usava efeito e
+  o ESLint acusou `setState` síncrono dentro de effect). Conteúdo de
+  cada página não mudou nada, só o componente `Layout.jsx` foi
+  reescrito. Testado no navegador em desktop e mobile (375px): todas as
+  páginas renderizam corretamente dentro do novo layout, painel mobile
+  abre/fecha e navega corretamente, lint limpo (sobrou só o aviso
+  pré-existente do `AuthContext.jsx`, não relacionado a esta mudança).
 - Login e Register usam `AuthContext.login()` + `useNavigate()` (SPA, sem
   reload); logout funcional
 - Interceptor de 401 ativo — sessão expirada desloga automaticamente
@@ -772,6 +829,25 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   (`Layout.jsx`), não uma aba do menu principal — é uma tela de baixa
   frequência de uso, não faria sentido competir por espaço com
   Dashboard/Wallets/etc.
+- **"Você vs. Bitcoin"** — novo card no Dashboard (`Dashboard.jsx`), logo
+  abaixo da Distribuição por moeda: mostra lado a lado o valor real do
+  patrimônio e o valor hipotético "se fosse 100% Bitcoin" (dado
+  `benchmark` da API), cada um com seu badge de variação percentual. Só
+  aparece quando a API retorna esse campo (precisa de um ponto inicial
+  de patrimônio no período).
+- **Segurança** (`Security.jsx`, `/seguranca`) — nova em 2026-07-23:
+  ação sob demanda (botão "Verificar aprovações", mesmo padrão do
+  "Buscar tokens" — não carrega sozinho ao abrir a tela, é uma chamada
+  mais pesada a um serviço externo). Cards de resumo (total de
+  aprovações, risco alto, wallets verificadas) e lista de aprovações
+  com badge de risco colorido (vermelho/amarelo/verde), valor aprovado
+  (destaca "Ilimitado" em vermelho), aviso quando o contrato não é
+  open source, e link direto pro block explorer correto de cada rede
+  (Etherscan/Polygonscan/BscScan, novo campo `explorerUrl` em
+  `config/networks.js`) — revogar a aprovação em si precisa assinar uma
+  transação, então fica por conta do usuário fazer isso no explorer ou
+  numa ferramenta tipo Revoke.cash; o Nexfolio só mostra o risco, não
+  tem custódia pra agir sozinho.
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -945,16 +1021,40 @@ pelo próprio usuário no sistema — exige senha de novo, revoga tokens,
 cascade de dados já verificado no banco antes de implementar. Testado
 ao vivo numa conta descartável.
 
+**Fase 3.5 — Comparativo "Você vs. Bitcoin" + Scanner de aprovações
+arriscadas** ✅ concluída: ver detalhes na seção Backend/Frontend acima.
+Ideia trazida pelo Wellington ao pedir sugestões de "algo inovador";
+optou por essas duas (mais baratas/sem custo variável) em vez de um
+assistente de IA conversacional sobre o portfólio (avaliado e adiado
+pra mais pra frente — seria a primeira integração com custo por uso do
+projeto, tudo até aqui usou fornecedores com plano gratuito). Scanner
+de aprovações testado ao vivo com wallets reais do Wellington, achou 5
+aprovações de verdade (nenhuma de risco alto).
+
+**Fase 3.6 — Redesign visual v2 (sidebar de navegação)** ✅ concluída
+(etapa 1 de 3): ver detalhes na seção Frontend acima ("Navegação em
+sidebar"). Pedido do Wellington (2026-07-23) pra modernizar a aparência
+do sistema como um todo, dividido em 3 etapas por prioridade confirmada
+por ele ("Sidebar primeiro, depois landing"): (1) sidebar de navegação
+— **feito**; (2) página de apresentação/landing pro visitante não
+autenticado — **próxima**, ainda não desenhada em detalhe; (3) passe
+geral de polimento visual — adiada, escopo a definir depois de ver como
+as duas primeiras etapas ficam.
+
 **Fase 2 — Completar funcionalidades** (atual)
 Fases A, B de confiabilidade, suporte a tokens, mais blockchains EVM,
 redesign de Ativos, Insights v1, sentimento de mercado, alertas via
-Telegram e Minha Conta concluídos (2026-07-23). Próximos candidatos,
-combinados com o Wellington: feed de transações do Ethereum (via
-Etherscan, pede chave de API) → blockchains independentes (Cardano,
-Tron, Hyperliquid, Kaspa) → mais tipos de alerta (ex: aprovações de
-contrato arriscadas) → notificação por email como canal alternativo ao
-Telegram. Perguntar ao Wellington a prioridade antes de escolher a
-próxima.
+Telegram, Minha Conta, comparativo/scanner de segurança e sidebar de
+navegação concluídos (2026-07-23). Próximos candidatos, combinados com
+o Wellington: página de apresentação/landing (etapa 2 do redesign
+visual, já priorizada) → feed de transações do Ethereum (via Etherscan,
+pede chave de API) → blockchains independentes (Cardano, Tron,
+Hyperliquid, Kaspa) → notificação por email como canal alternativo ao
+Telegram → assistente de IA conversacional sobre o portfólio (primeira
+integração com custo variável do projeto — precisa decidir orçamento
+antes). Perguntar ao Wellington a prioridade antes de escolher a
+próxima, exceto a landing page que já está confirmada como próximo
+passo.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)

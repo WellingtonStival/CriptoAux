@@ -5,6 +5,7 @@ import Assets from "./pages/Assets";
 import Market from "./pages/Market";
 import Alerts from "./pages/Alerts";
 import Account from "./pages/Account";
+import Security from "./pages/Security";
 import News from "./pages/News";
 import Wallets from "./pages/Wallets";
 import WalletHistory from "./pages/WalletHistory";
@@ -73,6 +74,15 @@ function App() {
         element={
           <PrivateRoute>
             <News />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/seguranca"
+        element={
+          <PrivateRoute>
+            <Security />
           </PrivateRoute>
         }
       />

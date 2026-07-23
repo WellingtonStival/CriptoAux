@@ -22,6 +22,7 @@ import {
   PieChart,
   Layers,
   Lightbulb,
+  Scale,
 } from "lucide-react";
 import Layout from "../components/Layout";
 import PriceChangeBadge from "../components/PriceChangeBadge";
@@ -331,6 +332,45 @@ function Dashboard() {
                         </div>
                       );
                     })}
+                  </CardContent>
+                </Card>
+              )}
+
+              {data.benchmark && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Scale className="size-4" />
+                      Você vs. Bitcoin
+                      <InfoTooltip>
+                        E se todo o seu patrimônio do início do período
+                        selecionado acima tivesse ficado 100% em Bitcoin, em
+                        vez da sua distribuição real entre moedas? Não é
+                        recomendação — é só um ponto de comparação pra
+                        entender o efeito da diversificação.
+                      </InfoTooltip>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <div className="text-xs text-muted-foreground">Seu patrimônio real</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-lg font-semibold text-foreground">
+                          {formatUsd(data.summary.current_value_usd)}
+                        </span>
+                        <PriceChangeBadge change={data.summary.change_percent} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-xs text-muted-foreground">Se fosse 100% Bitcoin</div>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-lg font-semibold text-foreground">
+                          {formatUsd(data.benchmark.hypothetical_value_usd)}
+                        </span>
+                        <PriceChangeBadge change={data.benchmark.btc_change_percent} />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               )}
