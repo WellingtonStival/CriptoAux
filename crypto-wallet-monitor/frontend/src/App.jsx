@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
 import Dashboard from "./pages/Dashboard";
+import Assets from "./pages/Assets";
 import News from "./pages/News";
 import Wallets from "./pages/Wallets";
 import WalletHistory from "./pages/WalletHistory";
@@ -33,6 +34,15 @@ function App() {
         element={
           <PrivateRoute>
             <Wallets />
+          </PrivateRoute>
+        }
+      />
+
+      <Route
+        path="/ativos"
+        element={
+          <PrivateRoute>
+            <Assets />
           </PrivateRoute>
         }
       />

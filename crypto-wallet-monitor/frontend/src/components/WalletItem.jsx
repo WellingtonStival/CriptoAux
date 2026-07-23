@@ -1,8 +1,27 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Pencil, Trash2, RefreshCw, History, Check, X, WifiOff } from "lucide-react";
-import { getWalletBalance, deleteWallet, renameWallet } from "../services/api";
+import {
+  Pencil,
+  Trash2,
+  RefreshCw,
+  History,
+  Check,
+  X,
+  WifiOff,
+  Coins,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
+import {
+  getWalletBalance,
+  deleteWallet,
+  renameWallet,
+  getWalletTokens,
+  syncWalletTokens,
+  deleteWalletToken,
+} from "../services/api";
 import { NETWORKS } from "../config/networks";
+import { formatUsd } from "../utils/format";
 import PriceChangeBadge from "./PriceChangeBadge";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -10,6 +29,15 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
 const REFRESH_INTERVAL_MS = 60_000;
+
+// Redes cujo backend sabe descobrir tokens (BlockchainServiceInterface
+// implementando TokenDiscoveryProvider) - Bitcoin nao tem equivalente.
+const TOKEN_SUPPORTED_NETWORKS = ["ethereum", "polygon", "bnb", "solana"];
+
+function truncateAddress(address) {
+  if (!address || address.length <= 12) return address;
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
 
 function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   const networkConfig = NETWORKS[wallet.network] ?? {
@@ -26,6 +54,10 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(wallet.name ?? "");
   const [savingName, setSavingName] = useState(false);
+  const [tokens, setTokens] = useState([]);
+  const [tokensExpanded, setTokensExpanded] = useState(false);
+  const [syncingTokens, setSyncingTokens] = useState(false);
+  const supportsTokens = TOKEN_SUPPORTED_NETWORKS.includes(wallet.network);
 
   useEffect(() => {
     const cached = localStorage.getItem(`wallet_balance_${wallet.id}`);
@@ -35,10 +67,46 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
 
     loadBalance();
 
+    if (supportsTokens) {
+      loadTokens();
+    }
+
     const interval = setInterval(loadBalance, REFRESH_INTERVAL_MS);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallet.id]);
+
+  async function loadTokens() {
+    try {
+      const response = await getWalletTokens(wallet.id);
+      setTokens(response.data.tokens ?? []);
+    } catch {
+      // tokens sao um extra: se falhar, o resto do card continua normal
+    }
+  }
+
+  async function handleSyncTokens() {
+    setSyncingTokens(true);
+
+    try {
+      const response = await syncWalletTokens(wallet.id);
+      setTokens(response.data.tokens ?? []);
+      setTokensExpanded(true);
+    } catch {
+      setError("Não foi possível buscar os tokens.");
+    } finally {
+      setSyncingTokens(false);
+    }
+  }
+
+  async function handleRemoveToken(tokenId) {
+    try {
+      await deleteWalletToken(wallet.id, tokenId);
+      setTokens((current) => current.filter((token) => token.id !== tokenId));
+    } catch {
+      setError("Não foi possível remover o token.");
+    }
+  }
 
   async function loadBalance(force = false) {
     setLoading(true);
@@ -240,9 +308,56 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
           </div>
         )}
 
+        {supportsTokens && tokens.length > 0 && (
+          <div className="mb-3">
+            <button
+              onClick={() => setTokensExpanded((current) => !current)}
+              className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <Coins className="size-3.5" />
+              {tokens.length} {tokens.length === 1 ? "token" : "tokens"}
+              {tokensExpanded ? (
+                <ChevronUp className="size-3.5" />
+              ) : (
+                <ChevronDown className="size-3.5" />
+              )}
+            </button>
+
+            {tokensExpanded && (
+              <ul className="mt-2 flex flex-col gap-1.5 rounded-md border border-border p-2">
+                {tokens.map((token) => (
+                  <li
+                    key={token.id}
+                    className="flex items-center justify-between gap-2 text-sm"
+                  >
+                    <span className="min-w-0 truncate text-foreground">
+                      {token.symbol ?? truncateAddress(token.contract_address)}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <span className="text-muted-foreground">
+                        {token.balance.toLocaleString("en-US", { maximumFractionDigits: 4 })}
+                        {token.value_usd !== null && (
+                          <> · {formatUsd(token.value_usd)}</>
+                        )}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveToken(token.id)}
+                        title="Parar de rastrear"
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
         {error && <div className="mb-3 text-sm text-destructive">{error}</div>}
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => loadBalance(true)} disabled={loading}>
             <RefreshCw className={loading ? "size-3.5 animate-spin" : "size-3.5"} />
             {loading ? "Atualizando..." : "Atualizar saldo"}
@@ -254,6 +369,13 @@ function WalletItem({ wallet, prices, onDeleted, onBalanceLoaded, onRenamed }) {
               Ver histórico
             </Link>
           </Button>
+
+          {supportsTokens && (
+            <Button variant="outline" size="sm" onClick={handleSyncTokens} disabled={syncingTokens}>
+              <Coins className={syncingTokens ? "size-3.5 animate-spin" : "size-3.5"} />
+              {syncingTokens ? "Buscando..." : "Buscar tokens"}
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

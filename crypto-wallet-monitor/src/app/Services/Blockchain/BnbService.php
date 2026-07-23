@@ -2,15 +2,15 @@
 
 namespace App\Services\Blockchain;
 
-class EthereumService extends AbstractEvmChainService
+class BnbService extends AbstractEvmChainService
 {
     protected function network(): string
     {
-        return 'ethereum';
+        return 'bnb';
     }
 
     public function symbol(): string
     {
-        return 'ETH';
+        return 'BNB';
     }
 }

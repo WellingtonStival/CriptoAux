@@ -32,7 +32,9 @@ class WalletController extends Controller
 							$fail('Endereço inválido para a blockchain selecionada.');
 						}
 					},
-					Rule::unique('wallets', 'address'),
+					Rule::unique('wallets', 'address')->where(
+						fn ($query) => $query->where('network', $request->input('network'))
+					),
 				],
 				'name' => ['nullable', 'string', 'max:255'],
 		]);

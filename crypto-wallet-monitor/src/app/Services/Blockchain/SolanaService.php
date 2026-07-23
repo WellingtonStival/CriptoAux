@@ -4,14 +4,22 @@ namespace App\Services\Blockchain;
 
 use Illuminate\Support\Facades\Http;
 use App\Services\Blockchain\Contracts\BlockchainServiceInterface;
+use App\Services\Blockchain\Contracts\TokenDiscoveryProvider;
 use App\Services\Blockchain\Contracts\TransactionHistoryProvider;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
-class SolanaService implements BlockchainServiceInterface, TransactionHistoryProvider
+class SolanaService implements BlockchainServiceInterface, TransactionHistoryProvider, TokenDiscoveryProvider
 {
     private const LAMPORTS_PER_SOL = 1_000_000_000;
+
+    /**
+     * Program ID padrao do SPL Token na Solana - constante publica, igual
+     * pra qualquer token que segue o padrao (nao e um contrato por token
+     * como no Ethereum, e um "dono" comum de todas as contas de token).
+     */
+    private const SPL_TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 
     private function cacheKey(string $address): string
     {
@@ -143,6 +151,161 @@ class SolanaService implements BlockchainServiceInterface, TransactionHistoryPro
 
             return $transactions;
         });
+    }
+
+    /**
+     * Descobre tokens SPL via getTokenAccountsByOwner - diferente do
+     * Ethereum, essa e uma chamada normal da propria RPC (nao precisa de
+     * indexador terceiro): cada token que uma conta possui na Solana tem
+     * sua propria "conta de token", e essa chamada lista todas de uma vez.
+     *
+     * A RPC nao devolve simbolo/nome do token - resolvido a parte via
+     * fetchTokenMetadata() (API publica da Jupiter, sem chave). Se essa
+     * segunda chamada falhar, symbol/name ficam null e o frontend cai pro
+     * endereco do token truncado como rotulo (mesmo padrao de fallback ja
+     * usado pra rede desconhecida) - a lista de saldos nunca depende dela.
+     */
+    public function discoverTokens(string $address): array
+    {
+        $response = Http::timeout(10)->retry(2, 200, throw: false)->post(config('blockchain.solana.rpc_url'), [
+            'jsonrpc' => '2.0',
+            'method' => 'getTokenAccountsByOwner',
+            'params' => [
+                $address,
+                ['programId' => self::SPL_TOKEN_PROGRAM_ID],
+                ['encoding' => 'jsonParsed'],
+            ],
+            'id' => 1,
+        ]);
+
+        if (!$response->successful()) {
+            Log::warning('Falha ao descobrir tokens Solana', [
+                'address' => $address,
+                'status' => $response->status(),
+            ]);
+            return [];
+        }
+
+        $accounts = $response->json('result.value') ?? [];
+        $tokens = [];
+
+        foreach ($accounts as $account) {
+            $info = $account['account']['data']['parsed']['info'] ?? null;
+            $amount = $info['tokenAmount'] ?? null;
+
+            if (!$info || !$amount) {
+                continue;
+            }
+
+            $uiAmount = (float) ($amount['uiAmount'] ?? 0);
+
+            if ($uiAmount <= 0) {
+                continue;
+            }
+
+            $tokens[] = [
+                'contract_address' => $info['mint'],
+                'symbol' => null,
+                'name' => null,
+                'logo_url' => null,
+                'decimals' => (int) $amount['decimals'],
+                'balance' => $uiAmount,
+            ];
+        }
+
+        $metadata = $this->fetchTokenMetadata(array_column($tokens, 'contract_address'));
+
+        foreach ($tokens as &$token) {
+            $found = $metadata[$token['contract_address']] ?? null;
+            $token['symbol'] = $found['symbol'] ?? null;
+            $token['name'] = $found['name'] ?? null;
+            $token['logo_url'] = $found['logo_url'] ?? null;
+        }
+        unset($token);
+
+        return $tokens;
+    }
+
+    /**
+     * Busca nome/simbolo de varios mints numa unica chamada em lote (a API
+     * aceita ate 100 enderecos por requisicao - por isso o chunk).
+     */
+    private function fetchTokenMetadata(array $mintAddresses): array
+    {
+        $mintAddresses = array_values(array_unique($mintAddresses));
+
+        if ($mintAddresses === []) {
+            return [];
+        }
+
+        $metadata = [];
+
+        foreach (array_chunk($mintAddresses, 100) as $chunk) {
+            $response = Http::timeout(5)->retry(2, 200, throw: false)->get(config('blockchain.solana.token_metadata_url'), [
+                'query' => implode(',', $chunk),
+            ]);
+
+            if (!$response->successful()) {
+                Log::warning('Falha ao consultar nomes de tokens Solana (Jupiter)', [
+                    'status' => $response->status(),
+                ]);
+                continue;
+            }
+
+            foreach ($response->json() ?? [] as $entry) {
+                if (!isset($entry['id'])) {
+                    continue;
+                }
+
+                $metadata[$entry['id']] = [
+                    'symbol' => $entry['symbol'] ?? null,
+                    'name' => $entry['name'] ?? null,
+                    'logo_url' => $entry['icon'] ?? null,
+                ];
+            }
+        }
+
+        return $metadata;
+    }
+
+    /**
+     * Atualiza o saldo de um token ja conhecido. Como uma conta pode ter
+     * mais de uma "conta de token" pro mesmo mint (raro, mas possivel),
+     * soma todas - mesma logica de "quanto desse token essa carteira tem
+     * no total" que discoverTokens ja aplica implicitamente ao listar
+     * cada conta separada.
+     */
+    public function getTokenBalance(string $address, string $contractAddress, int $decimals): float
+    {
+        $response = Http::timeout(5)->retry(2, 200, throw: false)->post(config('blockchain.solana.rpc_url'), [
+            'jsonrpc' => '2.0',
+            'method' => 'getTokenAccountsByOwner',
+            'params' => [
+                $address,
+                ['mint' => $contractAddress],
+                ['encoding' => 'jsonParsed'],
+            ],
+            'id' => 1,
+        ]);
+
+        if (!$response->successful()) {
+            Log::warning('Falha ao consultar saldo de token Solana', [
+                'address' => $address,
+                'mint' => $contractAddress,
+                'status' => $response->status(),
+            ]);
+            abort(502, 'Erro ao consultar saldo do token');
+        }
+
+        $accounts = $response->json('result.value') ?? [];
+        $total = 0.0;
+
+        foreach ($accounts as $account) {
+            $amount = $account['account']['data']['parsed']['info']['tokenAmount'] ?? null;
+            $total += (float) ($amount['uiAmount'] ?? 0);
+        }
+
+        return $total;
     }
 
     private function fetchTransactionDelta(string $address, string $signature): ?array

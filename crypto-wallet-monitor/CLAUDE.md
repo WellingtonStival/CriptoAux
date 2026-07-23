@@ -94,8 +94,10 @@ crypto-wallet-monitor/
 │   ├── app/Models/              User, Wallet, WalletBalanceHistory
 │   ├── app/Notifications/       ResetPasswordNotification (linka pro frontend)
 │   ├── app/Services/Blockchain/ BlockchainServiceInterface, TransactionHistoryProvider,
-│   │                             EthereumService, SolanaService, BitcoinService,
-│   │                             BlockchainResolver
+│   │                             AbstractEvmChainService (logica EVM
+│   │                             compartilhada), EthereumService,
+│   │                             PolygonService, BnbService, SolanaService,
+│   │                             BitcoinService, BlockchainResolver
 │   ├── app/Services/Market/     PriceService (cotações via CoinGecko)
 │   ├── app/Services/Wallet/     BalanceHistoryRecorder (salva snapshot)
 │   ├── app/Console/Commands/    CaptureWalletBalances (agendado de hora em hora)
@@ -141,7 +143,104 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (113 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (147 testes, `php artisan test`)
+- **Suporte a tokens/ativos (2026-07-23)**: além do saldo nativo, o
+  sistema agora rastreia tokens dentro de uma wallet (ERC-20 no
+  Ethereum, SPL na Solana — Bitcoin não suporta). Duas tabelas novas:
+  `wallet_tokens` (quais tokens cada wallet rastreia) e
+  `wallet_token_balance_histories` (snapshot de saldo/preço por token,
+  coluna `balance` em `decimal(50,18)`). Nova interface
+  `TokenDiscoveryProvider` (`discoverTokens()` + `getTokenBalance()`),
+  implementada por `EthereumService` e `SolanaService`.
+  **Ethereum** usa a Alchemy (Token API, `alchemy_getTokenBalances` em
+  modo `erc20` pra descoberta automática + `alchemy_getTokenMetadata`
+  por token pra símbolo/nome/decimais) — precisa de `ALCHEMY_API_KEY`
+  no `.env`, senão a descoberta simplesmente não acha nada (degrada
+  sem quebrar). ⚠️ **Decisão verificada, não presumida**: a princípio
+  cogitei a Etherscan pra isso, mas o endpoint que lista todos os
+  tokens de um endereço (`addresstokenbalance`) é **PRO, não está no
+  plano gratuito** — descobri isso lendo a documentação deles antes de
+  implementar, e troquei pra Alchemy (Token API disponível no plano
+  gratuito, 30M unidades/mês, essa chamada custa 20). Atualizar saldo
+  de um token já conhecido (`getTokenBalance`) usa `eth_call` na RPC
+  normal, não a Alchemy — só a descoberta inicial consome a cota dela.
+  ✅ **Testado ao vivo em 2026-07-23** com `ALCHEMY_API_KEY` real
+  configurada: descobriu 53 tokens legítimos numa wallet Ethereum real
+  (o resto foi filtrado como spam, ver abaixo).
+  **Solana** não precisa de fornecedor terceiro pra descobrir *quais*
+  tokens a wallet tem: a própria RPC (`getTokenAccountsByOwner`, mesmo
+  endpoint já usado pra saldo) lista todos nativamente, incluindo
+  decimais. Pra *nome/símbolo*, `SolanaService::fetchTokenMetadata()`
+  faz uma chamada em lote (até 100 mints por request, por isso o
+  `array_chunk`) pra API pública e **gratuita, sem chave**,
+  `lite-api.jup.ag/tokens/v2/search` da Jupiter — diferente da
+  `api.jup.ag/tokens/v2/search` (que passou a exigir `x-api-key`), a
+  variante `lite-api.jup.ag` continua aberta. ⚠️ **Verificado ao vivo
+  antes de implementar** (`curl` direto, sem chave, HTTP 200) — mesmo
+  hábito de checar fornecedor antes de codar. Se a chamada falhar,
+  symbol/name ficam `null` e o frontend cai pro endereço truncado
+  (nunca quebra a listagem de saldos, que não depende dela). Testado
+  ao vivo: **107 de 148 tokens** de uma wallet Solana real ganharam
+  nome/símbolo reconhecido pela Jupiter (o resto é token não listado
+  lá — normalmente é spam mesmo).
+  **Filtro anti-spam (`WalletTokenController::SPAM_BALANCE_THRESHOLD`,
+  1e15)**: tokens de spam/scam mintam saldos nominais próximos do
+  limite do `uint256` (ex: `1.15e59`) só pra aparecer com destaque em
+  exploradores — isso não só polui a lista como **estourava a coluna
+  `balance`** mesmo depois de alargada pra `decimal(50,18)` (bug real,
+  pego em produção local: `SQLSTATE[22003]: numeric field overflow`).
+  A correção definitiva não foi alargar a coluna de novo (perseguir
+  esse número é uma corrida perdida — um contrato malicioso pode
+  devolver qualquer valor até `~1.15e77`), foi filtrar no
+  `WalletTokenController::sync()` qualquer token com saldo nominal
+  acima do limiar **antes de persistir**, logando um aviso. Também
+  resolve parte do débito técnico de poluição por spam citado antes.
+  Preço dos tokens vem da CoinGecko (`/simple/token_price/{platform}`,
+  mesmo fornecedor já usado pra preço das moedas nativas — sem vendor
+  novo pra isso). Endpoints: `POST /wallets/{id}/tokens/sync`
+  (descoberta ao vivo, ação mais pesada — só roda quando o usuário
+  clica "Buscar tokens", não a cada carregamento de tela),
+  `GET /wallets/{id}/tokens` (lê o que já foi sincronizado, sem tocar
+  a blockchain), `DELETE /wallets/{id}/tokens/{tokenId}` (parar de
+  rastrear), `GET /assets` (visão consolidada — soma o mesmo token em
+  todas as wallets do usuário, agrupado por rede+contrato).
+  Cada token também guarda `logo_url` (vem do campo `logo` da
+  `alchemy_getTokenMetadata` no Ethereum/Polygon/BNB, ou do `icon` da
+  Jupiter na Solana) — usado pra mostrar o ícone real na tela Ativos.
+  ⚠️ **Bug real pego ao testar**: `WalletToken::$fillable` não incluía
+  `logo_url` — o `updateOrCreate()` descartava o campo silenciosamente
+  (mass assignment protection do Eloquent), então nenhum logo era
+  salvo mesmo a API devolvendo o dado certo. Só apareceu porque testei
+  ao vivo e conferi a coluna no banco, não só a resposta da API.
+- **Preço de token limitado sem chave de API da CoinGecko (2026-07-23)**:
+  descoberto ao vivo (não hipótese) que `/simple/token_price/{platform}`
+  **sem** chave de API aceita só **1 endereço de contrato por
+  requisição** — a partir do segundo, responde 400 "Number of contract
+  addresses in the request exceeds the allowed limit of 1". Como
+  `WalletTokenController::sync()` manda todos os contratos descobertos
+  de uma vez, isso zerava o preço de praticamente todo mundo (confirmado:
+  373 tokens sincronizados, 0 com preço). `PriceService` ganhou uma
+  chave opcional e gratuita (`COINGECKO_API_KEY`, plano "Demo" da
+  CoinGecko, sem cartão — header `x-cg-demo-api-key`), que sobe o limite
+  documentado pra até 515 endereços por chamada; `tokenPrices()` agora
+  agrupa em lotes de 100 quando a chave existe, ou 1 por vez (mais
+  lento, sujeito a rate limit) sem ela — nunca quebra, só degrada.
+  ✅ **Chave configurada e testada ao vivo em 2026-07-23** (plano Demo
+  gratuito): re-sincronizando as wallets de teste (Ethereum, Polygon,
+  BNB), o número de tokens com preço saltou de 0 pra 25 de 373, valor
+  total consolidado de $4.182,01 exibido corretamente na tela Ativos,
+  ordenado por valor, com logos reais (ex: CRV, WMATIC).
+- **Filtro anti-spam v2 / débito técnico revisitado**: o filtro de saldo
+  implausível (acima) resolve o caso extremo (overflow), mas não resolve
+  "poeira" comum nem tokens genuinamente sem preço — isso passou a ser
+  tratado na apresentação (ver Frontend/Ativos abaixo) em vez de ocultar
+  dado no backend, pra não esconder informação que pode ficar relevante.
+  ⚠️ **Observação, não bug**: preço listado na CoinGecko não garante
+  liquidez real — um token pode ter uma cotação técnica alta mas pouco
+  volume/profundidade de mercado pra vender pelo preço mostrado (comum
+  em tokens de baixíssima capitalização). A tela mostra o preço que a
+  CoinGecko informa, sem validar liquidez — mesma limitação que
+  qualquer app do tipo (CoinStats, Zerion, etc.) tem.
   ⚠️ `PortfolioControllerTest` tem 2 casos sensíveis a horário de
   execução (bucket por hora) que falham dependendo de quando os testes
   rodam — pré-existente, não relacionado a nenhuma mudança recente,
@@ -249,6 +348,58 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
     (`blockstream.info/api/address/{address}`), porque um nó Bitcoin não
     expõe "saldo de um endereço" sem indexar todos os UTXOs
   - Todos cacheiam por 60s
+- **Polygon e BNB Chain (2026-07-23)**: mais duas redes EVM-compatíveis
+  além do Ethereum. Decisão de arquitetura (discutida com o Wellington
+  como "Eixo A" — blockchains nativas novas — vs "Eixo B" — tokens dentro
+  de chains já suportadas, feito antes): como Polygon/BNB usam a mesma
+  RPC JSON, o mesmo padrão de endereço `0x...` e a mesma Token API da
+  Alchemy que o Ethereum já usava, a lógica foi extraída pra uma classe
+  base `AbstractEvmChainService` (saldo, cache, descoberta de tokens,
+  `balanceOf` via `eth_call`) — `EthereumService`, `PolygonService` e
+  `BnbService` viram subclasses finas que só informam a chave de rede e
+  o símbolo nativo. `EthereumService` manteve o nome e o cache key
+  (`eth_balance:...`) pra não quebrar nada já existente.
+  ⚠️ **Verificado ao vivo antes de codar** (mesmo hábito de sempre): uma
+  `ALCHEMY_API_KEY` só atende as redes **habilitadas manualmente no
+  dashboard da Alchemy** — por padrão só Ethereum vem ligado; tentar usar
+  Polygon/BNB sem habilitar dá erro `"network not enabled for this app"`
+  (não é falta de suporte, só falta de configuração). O Wellington
+  habilitou as duas antes do teste ao vivo confirmar que funcionam.
+  RPC de saldo nativo usa endpoint público **separado** da Alchemy
+  (`polygon-bor-rpc.publicnode.com`, `bsc-dataseed.binance.org`) —
+  mesmo racional já usado no Ethereum: não gastar cota da Alchemy com
+  consultas de saldo que se repetem a cada 60s por wallet (só a
+  descoberta de tokens usa a Alchemy).
+  **Gotcha real, achado ao testar**: os IDs da CoinGecko **não** batem
+  com as chaves de rede internas pra essas duas moedas (só bate por
+  coincidência em ethereum/solana/bitcoin) — o coin id de POL é
+  `polygon-ecosystem-token` (não "polygon", por causa da migração
+  MATIC→POL) e o de BNB é `binancecoin` (não "bnb"); o "asset platform
+  id" usado em `/simple/token_price/{platform}` também é outro valor
+  (`polygon-pos`, `binance-smart-chain`). `PriceService` ganhou um mapa
+  explícito (`COINGECKO_COIN_IDS`, `COINGECKO_PLATFORM_IDS`) em vez de
+  assumir que a chave de rede sempre serve como ID da CoinGecko.
+  **Outro bug pego ao testar ao vivo**: o endereço de uma wallet tinha
+  restrição de unicidade **global** (`wallets.address unique`) — como um
+  endereço `0x...` é o mesmo em qualquer rede EVM, isso impedia
+  cadastrar a mesma carteira em Ethereum e Polygon ao mesmo tempo.
+  Corrigido pra unicidade composta em `(address, network)` (migration
+  `make_wallet_address_unique_per_network`).
+  ⚠️ **Gotcha de infra**: o container `queue` (worker da fila) é um
+  processo Laravel de longa duração que só carrega o código uma vez no
+  boot — depois de qualquer mudança em código usado por jobs (ex:
+  `BlockchainResolver`), é preciso `docker compose restart queue` (e
+  `scheduler`, mesmo motivo) pra pegar a mudança. Sem isso, o worker
+  continua rodando a versão antiga em memória mesmo com o bind mount
+  atualizado, e jobs relacionados falham silenciosamente (só aparece no
+  log). Pego ao vivo: token nativo funcionava (via `php artisan serve`,
+  que não tem esse problema), mas a atualização automática de saldo em
+  background falhava até reiniciar o worker.
+  Testado ao vivo com o mesmo endereço (`vitalik.eth`) nas duas redes
+  novas: Polygon achou 76 tokens, BNB Chain achou 96 — volume de spam
+  bem maior que no Ethereum (gas mais barato viabiliza mais spam), mas
+  o filtro anti-spam (`SPAM_BALANCE_THRESHOLD`) e a descoberta via
+  Alchemy funcionaram sem erro nas duas.
 - **Histórico de transações (Solana e Bitcoin apenas)**: interface
   `TransactionHistoryProvider` (separada de `BlockchainServiceInterface`,
   só `SolanaService` e `BitcoinService` implementam — Ethereum ainda não,
@@ -413,7 +564,30 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   indicadores agregados (esses ficaram só no Dashboard). Também mostra o
   card "Concentração" (por moeda e por wallet, com nível colorido).
   `Layout.jsx` ganhou navegação entre as telas ("Dashboard" / "Minhas
-  Wallets" / "Notícias").
+  Wallets" / "Ativos" / "Notícias").
+- **Ativos** (`Assets.jsx`, `/ativos`) — redesenhada em 2026-07-23: visão
+  consolidada de todos os tokens de todas as wallets, somando o mesmo
+  token quando aparece em mais de uma (`GET /api/assets`). Cards de
+  resumo no topo (valor total, quantidade com preço, sem preço, total
+  rastreado), filtro por rede (abas, mesmo padrão do `News.jsx`), busca
+  por nome/símbolo/endereço, ordenação (valor/saldo/nome). A lista é
+  dividida em duas seções: **ativos com preço** (tabela com logo, saldo,
+  preço, valor e % do portfólio, ordenada por valor) e **sem preço/não
+  verificados** (colapsada por padrão, mostra só a contagem até o
+  usuário expandir, com aviso explícito de que o nome exibido pode ser
+  spam/phishing — vários tokens descobertos em testes reais tinham nomes
+  tipo "Visit https://get-usdc.com to claim rewards", nunca renderizados
+  como link). Motivo da divisão: antes da correção de preço da CoinGecko
+  (ver Backend acima), **0 de 373 tokens reais** tinham preço — uma
+  lista única ordenada "por valor" ficava com ordem essencialmente
+  aleatória. `TokenLogo` (componente local em `Assets.jsx`) mostra o
+  `logo_url` do token com fallback pra um círculo colorido com a
+  inicial do símbolo se a imagem não existir ou falhar ao carregar.
+  Cada card da wallet (`WalletItem.jsx`) ganhou um botão "Buscar tokens"
+  (redes que suportam: Ethereum, Polygon, BNB Chain, Solana) e uma lista
+  expansível dos tokens já rastreados, com botão pra parar de rastrear
+  um token específico. Símbolo ausente (tokens não listados na Jupiter/
+  Alchemy) cai pro endereço do contrato truncado como rótulo.
 - **Notícias** (`News.jsx`, `/noticias`): filtro por moeda (Todas/
   Ethereum/Solana/Bitcoin), lista de notícias com resumo (o que o próprio
   RSS já fornece, nunca o artigo completo) e link pra fonte original.
@@ -441,10 +615,15 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
-  `ethereum`, `bitcoin`, `solana` — todos já suportados pelo backend hoje.
-  Ao adicionar uma rede nova (ex: Kaspa), é preciso atualizar esse arquivo
-  **e** `WalletForm.jsx` (`ADDRESS_PATTERNS`/`NETWORK_OPTIONS`) além do
-  backend.
+  `ethereum`, `polygon`, `bnb`, `bitcoin`, `solana` — todos já suportados
+  pelo backend hoje. Ao adicionar uma rede nova (ex: Cardano, Tron —
+  blockchains independentes, não EVM), é preciso atualizar esse arquivo
+  **e** `WalletForm.jsx` (`ADDRESS_PATTERNS`/`NETWORK_OPTIONS`) **e**
+  `TradingViewChart.jsx` (`SYMBOLS`, par da Binance) além do backend. Pra
+  uma rede EVM nova (ex: Arbitrum, Base), o esforço no backend cai bastante
+  — só uma subclasse fina de `AbstractEvmChainService` + entradas em
+  `config/blockchain.php`/`config/alchemy.php` + mapeamento na
+  `PriceService` (ver Polygon/BNB acima), sem lógica nova pra escrever.
 - Setup Docker é só para desenvolvimento: backend roda `php artisan serve`
   (não é servidor de produção) e frontend roda `vite dev` (não é build
   estático). Precisa de imagem de produção antes do deploy (Fase 2).
@@ -556,13 +735,31 @@ ver detalhes na seção Backend acima.
 completa, rate limit) ainda não iniciada — ver nota de prioridade de
 2026-07-22 mais acima neste arquivo.
 
+**Fase 2.8 — Suporte a tokens/ativos (ERC-20 + SPL)** ✅ concluída: ver
+detalhes na seção Backend/Frontend acima. Decisão de arquitetura:
+priorizado suporte a token dentro das chains já suportadas (Ethereum,
+Solana) em vez de somar mais blockchains nativas — mesmo esforço de
+integração destrava muito mais moedas (qualquer token ERC-20/SPL, não
+só 1 moeda por integração).
+
+**Fase 2.9 — Mais blockchains EVM (Polygon, BNB Chain)** ✅ concluída: ver
+detalhes na seção Backend acima ("Polygon e BNB Chain"). Decisão de
+arquitetura: priorizado sobre o Insights v1 e o feed de transações do
+Ethereum a pedido explícito do Wellington (2026-07-23) — inverteu a
+ordem combinada anteriormente. Dentro do Eixo A (blockchains nativas
+novas), começou pelas EVM-compatíveis (esforço baixo, reaproveitam quase
+tudo do Ethereum) em vez de blockchains independentes (Cardano, Tron,
+Hyperliquid, Kaspa — cada uma exigiria integração e pesquisa de
+fornecedor do zero, esforço bem maior).
+
 **Fase 2 — Completar funcionalidades** (atual)
-Fases A e B de confiabilidade concluídas (2026-07-22). Próximos
-candidatos, combinados com o Wellington: Insights v1 (frases a partir de
-métricas que já existem, ex: concentração/variação) → feed de transações
-do Ethereum (via Etherscan, pede chave de API) → Kaspa (blockchain
-adicional) → alertas de variação/movimentação. Perguntar ao Wellington a
-prioridade antes de escolher a próxima.
+Fases A, B de confiabilidade, suporte a tokens e mais blockchains EVM
+concluídos (2026-07-23). Próximos candidatos, combinados com o
+Wellington: Insights v1 (frases a partir de métricas que já existem, ex:
+concentração/variação) → feed de transações do Ethereum (via Etherscan,
+pede chave de API) → blockchains independentes (Cardano, Tron,
+Hyperliquid, Kaspa) → alertas de variação/movimentação. Perguntar ao
+Wellington a prioridade antes de escolher a próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)

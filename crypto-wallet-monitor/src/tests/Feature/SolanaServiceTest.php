@@ -114,4 +114,124 @@ class SolanaServiceTest extends TestCase
         $this->assertSame(0.5, $transactions[0]['amount']);
         $this->assertNotNull($transactions[0]['timestamp']);
     }
+
+    public function test_discover_tokens_ignores_zero_balance_accounts(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => [
+                    'value' => [
+                        [
+                            'account' => ['data' => ['parsed' => ['info' => [
+                                'mint' => 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                                'tokenAmount' => ['amount' => '50000000', 'decimals' => 6, 'uiAmount' => 50.0],
+                            ]]]],
+                        ],
+                        [
+                            'account' => ['data' => ['parsed' => ['info' => [
+                                'mint' => 'So11111111111111111111111111111111111111112',
+                                'tokenAmount' => ['amount' => '0', 'decimals' => 9, 'uiAmount' => 0],
+                            ]]]],
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $tokens = app(SolanaService::class)->discoverTokens(self::VALID_ADDRESS);
+
+        $this->assertCount(1, $tokens);
+        $this->assertSame('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', $tokens[0]['contract_address']);
+        $this->assertSame(6, $tokens[0]['decimals']);
+        $this->assertSame(50.0, $tokens[0]['balance']);
+        $this->assertNull($tokens[0]['symbol']);
+    }
+
+    public function test_discover_tokens_resolves_name_and_symbol_via_jupiter(): void
+    {
+        Http::fake([
+            'lite-api.jup.ag/*' => Http::response([
+                [
+                    'id' => 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                    'name' => 'USD Coin',
+                    'symbol' => 'USDC',
+                    'icon' => 'https://example.com/usdc.png',
+                ],
+            ]),
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => [
+                    'value' => [
+                        [
+                            'account' => ['data' => ['parsed' => ['info' => [
+                                'mint' => 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                                'tokenAmount' => ['amount' => '50000000', 'decimals' => 6, 'uiAmount' => 50.0],
+                            ]]]],
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $tokens = app(SolanaService::class)->discoverTokens(self::VALID_ADDRESS);
+
+        $this->assertCount(1, $tokens);
+        $this->assertSame('USDC', $tokens[0]['symbol']);
+        $this->assertSame('USD Coin', $tokens[0]['name']);
+        $this->assertSame('https://example.com/usdc.png', $tokens[0]['logo_url']);
+    }
+
+    public function test_discover_tokens_keeps_null_names_when_jupiter_fails(): void
+    {
+        Http::fake([
+            'lite-api.jup.ag/*' => Http::response([], 500),
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => [
+                    'value' => [
+                        [
+                            'account' => ['data' => ['parsed' => ['info' => [
+                                'mint' => 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+                                'tokenAmount' => ['amount' => '50000000', 'decimals' => 6, 'uiAmount' => 50.0],
+                            ]]]],
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $tokens = app(SolanaService::class)->discoverTokens(self::VALID_ADDRESS);
+
+        $this->assertCount(1, $tokens);
+        $this->assertNull($tokens[0]['symbol']);
+        $this->assertNull($tokens[0]['name']);
+    }
+
+    public function test_get_token_balance_sums_across_multiple_token_accounts(): void
+    {
+        Http::fake([
+            '*' => Http::response([
+                'jsonrpc' => '2.0',
+                'result' => [
+                    'value' => [
+                        ['account' => ['data' => ['parsed' => ['info' => [
+                            'tokenAmount' => ['uiAmount' => 10.0],
+                        ]]]]],
+                        ['account' => ['data' => ['parsed' => ['info' => [
+                            'tokenAmount' => ['uiAmount' => 5.5],
+                        ]]]]],
+                    ],
+                ],
+            ]),
+        ]);
+
+        $balance = app(SolanaService::class)->getTokenBalance(
+            self::VALID_ADDRESS,
+            'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+            6,
+        );
+
+        $this->assertSame(15.5, $balance);
+    }
 }

@@ -11,6 +11,8 @@ use App\Http\Controllers\WalletTransactionController;
 use App\Http\Controllers\PortfolioController;
 use App\Http\Controllers\PriceController;
 use App\Http\Controllers\NewsController;
+use App\Http\Controllers\WalletTokenController;
+use App\Http\Controllers\AssetsController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
@@ -28,6 +30,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/prices', [PriceController::class, 'index']);
     Route::get('/portfolio/history', [PortfolioController::class, 'history']);
     Route::get('/news', [NewsController::class, 'index']);
+    Route::get('/assets', [AssetsController::class, 'index']);
+    Route::get('/wallets/{id}/tokens', [WalletTokenController::class, 'index']);
+    Route::post('/wallets/{id}/tokens/sync', [WalletTokenController::class, 'sync']);
+    Route::delete('/wallets/{id}/tokens/{tokenId}', [WalletTokenController::class, 'destroy']);
 });
 
 Route::middleware('auth:sanctum')->get(

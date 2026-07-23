@@ -82,6 +82,26 @@ export function getNews(network) {
 }
 
 /* =========================
+   TOKENS / ATIVOS
+========================= */
+
+export function getAssets() {
+  return api.get('/assets');
+}
+
+export function getWalletTokens(walletId) {
+  return api.get(`/wallets/${walletId}/tokens`);
+}
+
+export function syncWalletTokens(walletId) {
+  return api.post(`/wallets/${walletId}/tokens/sync`);
+}
+
+export function deleteWalletToken(walletId, tokenId) {
+  return api.delete(`/wallets/${walletId}/tokens/${tokenId}`);
+}
+
+/* =========================
    SENHA
 ========================= */
 

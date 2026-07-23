@@ -2,6 +2,8 @@ import { useEffect, useRef } from "react";
 
 const SYMBOLS = {
   ethereum: "BINANCE:ETHUSDT",
+  polygon: "BINANCE:POLUSDT",
+  bnb: "BINANCE:BNBUSDT",
   bitcoin: "BINANCE:BTCUSDT",
   solana: "BINANCE:SOLUSDT",
 };

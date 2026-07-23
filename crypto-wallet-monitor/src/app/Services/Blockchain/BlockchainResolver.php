@@ -10,6 +10,8 @@ class BlockchainResolver
     {
         return match ($network) {
             'ethereum' => app(EthereumService::class),
+            'polygon' => app(PolygonService::class),
+            'bnb' => app(BnbService::class),
             'solana' => app(SolanaService::class),
             'bitcoin' => app(BitcoinService::class),
             default => throw new \Exception("Blockchain não suportada"),
@@ -21,6 +23,6 @@ class BlockchainResolver
      */
     public static function supportedNetworks(): array
     {
-        return ['ethereum', 'solana', 'bitcoin'];
+        return ['ethereum', 'polygon', 'bnb', 'solana', 'bitcoin'];
     }
 }

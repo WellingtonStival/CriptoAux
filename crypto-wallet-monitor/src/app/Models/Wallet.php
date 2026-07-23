@@ -25,4 +25,9 @@ class Wallet extends Model
 	{
 		return $this->hasMany(WalletBalanceHistory::class);
 	}
+
+	public function tokens()
+	{
+		return $this->hasMany(WalletToken::class);
+	}
 }

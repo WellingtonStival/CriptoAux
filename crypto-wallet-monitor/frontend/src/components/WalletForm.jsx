@@ -10,18 +10,24 @@ import { Alert, AlertDescription } from "./ui/alert";
 
 const ADDRESS_PATTERNS = {
   ethereum: /^0x[a-fA-F0-9]{40}$/,
+  polygon: /^0x[a-fA-F0-9]{40}$/,
+  bnb: /^0x[a-fA-F0-9]{40}$/,
   solana: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
   bitcoin: /^(1[a-km-zA-HJ-NP-Z1-9]{25,34}|3[a-km-zA-HJ-NP-Z1-9]{25,34}|bc1[a-z0-9]{25,62})$/,
 };
 
 const NETWORK_OPTIONS = [
   { value: "ethereum", label: "Ethereum" },
+  { value: "polygon", label: "Polygon" },
+  { value: "bnb", label: "BNB Chain" },
   { value: "solana", label: "Solana" },
   { value: "bitcoin", label: "Bitcoin" },
 ];
 
 const ADDRESS_PLACEHOLDERS = {
   ethereum: "0x...",
+  polygon: "0x...",
+  bnb: "0x...",
   solana: "Endereço Solana",
   bitcoin: "Endereço Bitcoin",
 };

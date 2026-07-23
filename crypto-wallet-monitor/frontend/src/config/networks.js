@@ -4,6 +4,16 @@ export const NETWORKS = {
     symbol: "ETH",
     color: "#627eea",
   },
+  polygon: {
+    label: "Polygon",
+    symbol: "POL",
+    color: "#8247e5",
+  },
+  bnb: {
+    label: "BNB Chain",
+    symbol: "BNB",
+    color: "#f0b90b",
+  },
   bitcoin: {
     label: "Bitcoin",
     symbol: "BTC",

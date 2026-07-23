@@ -159,6 +159,24 @@ class WalletTest extends TestCase
         $response->assertStatus(422)->assertJsonValidationErrors('address');
     }
 
+    public function test_same_address_can_be_tracked_on_a_different_evm_network(): void
+    {
+        $user = User::factory()->create();
+        Wallet::factory()->for($user)->create([
+            'address' => '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            'network' => 'ethereum',
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/wallets', [
+            'address' => '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045',
+            'network' => 'polygon',
+        ]);
+
+        $response->assertStatus(201);
+    }
+
     public function test_network_must_be_supported(): void
     {
         $user = User::factory()->create();
