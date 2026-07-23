@@ -143,7 +143,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (194 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (203 testes, `php artisan test`)
 - **Suporte a tokens/ativos (2026-07-23)**: além do saldo nativo, o
   sistema agora rastreia tokens dentro de uma wallet (ERC-20 no
   Ethereum, SPL na Solana — Bitcoin não suporta). Duas tabelas novas:
@@ -576,6 +576,26 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   testes automatizados (que já criavam a regra direto via
   `AlertRule::create()` e reconferiam depois, mascarando o problema).
   Corrigido passando `is_active: true` explicitamente no `create()`.
+- **Minha Conta (2026-07-23)**: `AccountController` — `GET /api/account`
+  (nome, email, verificado, Telegram conectado, membro desde),
+  `PATCH /api/account` (trocar nome), `POST /api/account/password`
+  (trocar senha estando logado — diferente do fluxo "esqueci minha
+  senha", pede a senha atual via `Hash::check`) e
+  `DELETE /api/account` (exclusão permanente). Antes disso **não
+  existia nenhum endpoint** pra buscar dados do usuário logado — o
+  frontend só guardava o token, nunca nome/email.
+  **Exclusão de conta**: primeira ação verdadeiramente irreversível que
+  o próprio usuário pode disparar no sistema — exige a senha de novo no
+  corpo da requisição (não basta estar logado/ter o token). Revoga
+  todos os tokens Sanctum (`$user->tokens()->delete()`) antes de
+  apagar o usuário, encerrando a sessão de verdade. As foreign keys de
+  `wallets`, `wallet_balance_histories`, `wallet_tokens`,
+  `wallet_token_balance_histories` e `alert_rules` já eram todas
+  `ON DELETE CASCADE` (conferido antes de implementar, não assumido) —
+  apagar o usuário limpa tudo sozinho, sem rotina de limpeza manual.
+  ✅ **Testado ao vivo em 2026-07-23** numa conta descartável real:
+  senha errada bloqueia corretamente, senha certa exclui e desloga
+  (redireciona pro login), registro some do banco.
 
 ### Frontend — funcional e testado no navegador
 - Tailwind CSS instalado (via `@tailwindcss/vite`); todas as telas já
@@ -742,6 +762,16 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   lista dos alertas já criados com botão de pausar/ativar e remover.
   Formulário e lista só aparecem depois do Telegram conectado (sem
   canal configurado, não tem pra onde mandar alerta).
+- **Minha Conta** (`Account.jsx`, `/conta`) — nova em 2026-07-23: dados
+  da conta (nome editável inline, email + badge de verificado, status
+  do Telegram, "membro desde"), formulário de trocar senha, e card
+  vermelho de "Excluir conta" separado visualmente (borda destructive)
+  com confirmação inline por senha — mesmo padrão de "sem modal nativo"
+  já usado pra excluir wallet/token. Acesso pela tela é um ícone
+  discreto (`UserRound`) ao lado do botão "Sair" no cabeçalho
+  (`Layout.jsx`), não uma aba do menu principal — é uma tela de baixa
+  frequência de uso, não faria sentido competir por espaço com
+  Dashboard/Wallets/etc.
 
 ### Débitos técnicos conhecidos
 - `frontend/src/config/networks.js` define cor/label de badge para
@@ -909,15 +939,22 @@ temos em dev). Testado ao vivo com o bot real do Wellington
 (@ReportsNexfolioCrypt_bot) — conexão e disparo de alerta chegaram de
 verdade no Telegram dele.
 
+**Fase 3.4 — Minha Conta (dados + exclusão)** ✅ concluída: ver detalhes
+na seção Backend/Frontend acima. Primeira ação irreversível disparável
+pelo próprio usuário no sistema — exige senha de novo, revoga tokens,
+cascade de dados já verificado no banco antes de implementar. Testado
+ao vivo numa conta descartável.
+
 **Fase 2 — Completar funcionalidades** (atual)
 Fases A, B de confiabilidade, suporte a tokens, mais blockchains EVM,
-redesign de Ativos, Insights v1, sentimento de mercado e alertas via
-Telegram concluídos (2026-07-23). Próximos candidatos, combinados com o
-Wellington: feed de transações do Ethereum (via Etherscan, pede chave de
-API) → blockchains independentes (Cardano, Tron, Hyperliquid, Kaspa) →
-mais tipos de alerta (ex: aprovações de contrato arriscadas) → notificação
-por email como canal alternativo ao Telegram. Perguntar ao Wellington a
-prioridade antes de escolher a próxima.
+redesign de Ativos, Insights v1, sentimento de mercado, alertas via
+Telegram e Minha Conta concluídos (2026-07-23). Próximos candidatos,
+combinados com o Wellington: feed de transações do Ethereum (via
+Etherscan, pede chave de API) → blockchains independentes (Cardano,
+Tron, Hyperliquid, Kaspa) → mais tipos de alerta (ex: aprovações de
+contrato arriscadas) → notificação por email como canal alternativo ao
+Telegram. Perguntar ao Wellington a prioridade antes de escolher a
+próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)

@@ -146,6 +146,26 @@ export function deleteAlert(id) {
 }
 
 /* =========================
+   CONTA
+========================= */
+
+export function getAccount() {
+  return api.get('/account');
+}
+
+export function updateAccountName(name) {
+  return api.patch('/account', { name });
+}
+
+export function updateAccountPassword(data) {
+  return api.post('/account/password', data);
+}
+
+export function deleteAccount(password) {
+  return api.delete('/account', { data: { password } });
+}
+
+/* =========================
    SENHA
 ========================= */
 

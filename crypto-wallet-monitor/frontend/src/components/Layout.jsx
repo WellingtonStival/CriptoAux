@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, Wallet, Coins, Newspaper, Gauge, BellRing, LogOut } from "lucide-react";
+import { LayoutDashboard, Wallet, Coins, Newspaper, Gauge, BellRing, UserRound, LogOut } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import { cn } from "../lib/utils";
@@ -64,10 +64,27 @@ function Layout({ children }) {
             </nav>
           </div>
 
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            <LogOut className="size-4" />
-            Sair
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            <NavLink
+              to="/conta"
+              title="Minha Conta"
+              className={({ isActive }) =>
+                cn(
+                  "flex size-8 items-center justify-center rounded-md border border-border transition-colors",
+                  isActive
+                    ? "bg-muted text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )
+              }
+            >
+              <UserRound className="size-4" />
+            </NavLink>
+
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              <LogOut className="size-4" />
+              Sair
+            </Button>
+          </div>
         </div>
       </header>
 
