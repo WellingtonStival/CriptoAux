@@ -33,7 +33,7 @@ const REFRESH_INTERVAL_MS = 60_000;
 
 // Redes cujo backend sabe descobrir tokens (BlockchainServiceInterface
 // implementando TokenDiscoveryProvider) - Bitcoin nao tem equivalente.
-const TOKEN_SUPPORTED_NETWORKS = ["ethereum", "polygon", "bnb", "solana"];
+const TOKEN_SUPPORTED_NETWORKS = ["ethereum", "polygon", "bnb", "avalanche", "arbitrum", "solana"];
 
 function truncateAddress(address) {
   if (!address || address.length <= 12) return address;

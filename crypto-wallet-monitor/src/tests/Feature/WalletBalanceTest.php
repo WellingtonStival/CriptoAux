@@ -174,7 +174,7 @@ class WalletBalanceTest extends TestCase
         $wallet = Wallet::factory()->for($user)->create();
         Sanctum::actingAs($user);
 
-        Cache::put('eth_balance:' . strtolower($wallet->address), 9.5, now()->addSeconds(60));
+        Cache::put('ethereum_balance:' . strtolower($wallet->address), 9.5, now()->addSeconds(60));
 
         Http::fake(); // qualquer chamada aqui seria um bug - o cache deveria bastar
 
@@ -221,7 +221,7 @@ class WalletBalanceTest extends TestCase
         $wallet = Wallet::factory()->for($user)->create();
         Sanctum::actingAs($user);
 
-        Cache::put('eth_balance:' . strtolower($wallet->address), 9.5, now()->addSeconds(60));
+        Cache::put('ethereum_balance:' . strtolower($wallet->address), 9.5, now()->addSeconds(60));
 
         Http::fake([
             '*' => Http::response([

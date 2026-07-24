@@ -16,6 +16,16 @@ return [
         'symbol' => 'BNB',
         'decimals' => 18,
     ],
+    'avalanche' => [
+        'rpc_url' => env('AVAX_RPC_URL', 'https://api.avax.network/ext/bc/C/rpc'),
+        'symbol' => 'AVAX',
+        'decimals' => 18,
+    ],
+    'arbitrum' => [
+        'rpc_url' => env('ARBITRUM_RPC_URL', 'https://arb1.arbitrum.io/rpc'),
+        'symbol' => 'ETH',
+        'decimals' => 18,
+    ],
     'solana' => [
         'rpc_url' => env('SOL_RPC_URL', 'https://api.mainnet-beta.solana.com'),
         'symbol' => 'SOL',

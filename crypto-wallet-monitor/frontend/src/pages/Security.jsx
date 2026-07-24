@@ -112,7 +112,7 @@ function Security() {
       </h1>
       <p className="mb-6 text-sm text-muted-foreground">
         Verifica quais contratos têm permissão pra movimentar tokens das
-        suas wallets Ethereum, Polygon e BNB Chain — Solana ainda não é
+        suas wallets Ethereum, Polygon, BNB Chain, Avalanche e Arbitrum — Solana ainda não é
         suportado aqui.
       </p>
 
@@ -164,8 +164,8 @@ function Security() {
           {summary?.scanned_wallets === 0 && (
             <Card>
               <CardContent className="pt-4 text-muted-foreground">
-                Nenhuma wallet Ethereum, Polygon ou BNB Chain cadastrada
-                ainda.
+                Nenhuma wallet Ethereum, Polygon, BNB Chain, Avalanche ou
+                Arbitrum cadastrada ainda.
               </CardContent>
             </Card>
           )}

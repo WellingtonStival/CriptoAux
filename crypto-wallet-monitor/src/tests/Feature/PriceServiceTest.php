@@ -67,7 +67,25 @@ class PriceServiceTest extends TestCase
         $this->assertSame(65432.10, $prices['bitcoin']['usd']);
     }
 
-    public function test_maps_polygon_and_bnb_coin_ids_that_dont_match_the_network_key(): void
+    /**
+     * Arbitrum nao tem moeda nativa propria - o gas e pago em ETH, entao
+     * a rede compartilha o coin id "ethereum" com a mainnet. Isso exige
+     * que current() consiga preencher DUAS redes a partir da MESMA linha
+     * da resposta da CoinGecko, nao so a primeira que bater.
+     */
+    public function test_fills_arbitrum_from_the_same_coingecko_row_as_ethereum_mainnet(): void
+    {
+        Http::fake([
+            '*' => Http::response($this->marketsResponse()),
+        ]);
+
+        $prices = app(PriceService::class)->current();
+
+        $this->assertSame(3245.67, $prices['arbitrum']['usd']);
+        $this->assertSame(2.34, $prices['arbitrum']['change_24h']);
+    }
+
+    public function test_maps_polygon_bnb_and_avalanche_coin_ids_that_dont_match_the_network_key(): void
     {
         Http::fake([
             '*' => Http::response([
@@ -81,6 +99,11 @@ class PriceServiceTest extends TestCase
                     'current_price' => 569.45,
                     'price_change_percentage_24h_in_currency' => -0.2,
                 ],
+                [
+                    'id' => 'avalanche-2',
+                    'current_price' => 24.5,
+                    'price_change_percentage_24h_in_currency' => 3.4,
+                ],
             ]),
         ]);
 
@@ -88,9 +111,11 @@ class PriceServiceTest extends TestCase
 
         $this->assertSame(0.078, $prices['polygon']['usd']);
         $this->assertSame(569.45, $prices['bnb']['usd']);
+        $this->assertSame(24.5, $prices['avalanche']['usd']);
 
         Http::assertSent(fn ($request) => str_contains($request->url(), 'polygon-ecosystem-token')
-            && str_contains($request->url(), 'binancecoin'));
+            && str_contains($request->url(), 'binancecoin')
+            && str_contains($request->url(), 'avalanche-2'));
     }
 
     public function test_token_prices_uses_the_correct_coingecko_platform_id(): void
@@ -99,9 +124,13 @@ class PriceServiceTest extends TestCase
 
         app(PriceService::class)->tokenPrices('polygon', ['0x0000000000000000000000000000000000dead']);
         app(PriceService::class)->tokenPrices('bnb', ['0x0000000000000000000000000000000000beef']);
+        app(PriceService::class)->tokenPrices('avalanche', ['0x0000000000000000000000000000000000cafe']);
+        app(PriceService::class)->tokenPrices('arbitrum', ['0x0000000000000000000000000000000000feed']);
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/simple/token_price/polygon-pos'));
         Http::assertSent(fn ($request) => str_contains($request->url(), '/simple/token_price/binance-smart-chain'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/simple/token_price/avalanche'));
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/simple/token_price/arbitrum-one'));
     }
 
     public function test_caches_the_prices_and_does_not_repeat_the_request(): void

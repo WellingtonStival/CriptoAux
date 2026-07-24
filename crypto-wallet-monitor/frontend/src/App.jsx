@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import PrivateRoute from "./components/PrivateRoute";
-import Dashboard from "./pages/Dashboard";
+import HomeRoute from "./components/HomeRoute";
 import Assets from "./pages/Assets";
 import Market from "./pages/Market";
 import Alerts from "./pages/Alerts";
@@ -24,14 +24,7 @@ function App() {
       <Route path="/redefinir-senha" element={<ResetPassword />} />
       <Route path="/verificar-email" element={<VerifyEmail />} />
 
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Dashboard />
-          </PrivateRoute>
-        }
-      />
+      <Route path="/" element={<HomeRoute />} />
 
       <Route
         path="/wallets"

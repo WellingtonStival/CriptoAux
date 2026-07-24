@@ -66,6 +66,13 @@ class NewsService
         'bitcoin' => ['bitcoin', 'btc'],
         'ethereum' => ['ethereum', 'eth'],
         'solana' => ['solana', 'sol'],
+        'polygon' => ['polygon', 'matic'],
+        'bnb' => ['bnb chain', 'binance smart chain', 'bnb'],
+        'avalanche' => ['avalanche', 'avax'],
+        // "arb" sozinho e ambiguo demais (arbitragem, etc.) - so a palavra
+        // completa, aceitando detectar menos noticias em troca de nao
+        // marcar falso positivo.
+        'arbitrum' => ['arbitrum'],
     ];
 
     public function __construct(

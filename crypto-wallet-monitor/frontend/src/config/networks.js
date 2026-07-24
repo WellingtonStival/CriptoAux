@@ -17,6 +17,18 @@ export const NETWORKS = {
     color: "#f0b90b",
     explorerUrl: "https://bscscan.com/address/",
   },
+  avalanche: {
+    label: "Avalanche",
+    symbol: "AVAX",
+    color: "#e84142",
+    explorerUrl: "https://snowtrace.io/address/",
+  },
+  arbitrum: {
+    label: "Arbitrum",
+    symbol: "ETH",
+    color: "#28a0f0",
+    explorerUrl: "https://arbiscan.io/address/",
+  },
   bitcoin: {
     label: "Bitcoin",
     symbol: "BTC",

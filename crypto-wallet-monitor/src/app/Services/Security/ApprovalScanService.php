@@ -11,8 +11,8 @@ use Illuminate\Support\Facades\Log;
  * wallet, via GoPlus Security - API publica e gratuita, sem chave
  * (verificado ao vivo em 2026-07-23 com uma wallet real, retornou dado
  * de verdade incluindo aprovacoes "Unlimited"). So EVM (Ethereum/
- * Polygon/BNB) - Solana usa um mecanismo de "delegate" diferente, sem
- * suporte aqui ainda.
+ * Polygon/BNB/Avalanche/Arbitrum) - Solana usa um mecanismo de
+ * "delegate" diferente, sem suporte aqui ainda.
  */
 class ApprovalScanService
 {
@@ -20,6 +20,8 @@ class ApprovalScanService
         'ethereum' => '1',
         'polygon' => '137',
         'bnb' => '56',
+        'avalanche' => '43114',
+        'arbitrum' => '42161',
     ];
 
     public function supportsNetwork(string $network): bool

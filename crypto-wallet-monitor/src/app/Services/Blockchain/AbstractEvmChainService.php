@@ -35,10 +35,12 @@ abstract class AbstractEvmChainService implements BlockchainServiceInterface, To
 
     private function cacheKey(string $address): string
     {
-        // Prefixo baseado no simbolo (ex: "eth_balance:"), nao na chave de
-        // rede - mantem compatibilidade com o cache key que o
-        // EthereumService original ja usava antes desse refactor.
-        return strtolower($this->symbol()) . '_balance:' . strtolower($address);
+        // Prefixo baseado na chave de rede (ex: "ethereum_balance:"), nao no
+        // simbolo - o simbolo nao e unico entre redes (Arbitrum e outras
+        // L2s usam ETH como moeda nativa, igual a Ethereum mainnet; usar o
+        // simbolo colidiria as duas no mesmo cache key e devolveria o saldo
+        // errado pra uma delas).
+        return strtolower($this->network()) . '_balance:' . strtolower($address);
     }
 
     public function getCachedBalance(string $address): ?float

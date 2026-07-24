@@ -18,10 +18,17 @@ class PriceService
      * Chain (o coin id e "binancecoin", nao "bnb"). Mapeado explicitamente
      * em vez de assumir que sempre bate.
      */
+    /**
+     * Mais de uma chave de rede pode apontar pro mesmo coin id - Arbitrum
+     * (e outras L2s) nao tem moeda nativa propria, o gas e pago em ETH,
+     * o mesmo ativo da Ethereum mainnet (ARB e so o token de governanca).
+     */
     private const COINGECKO_COIN_IDS = [
         'ethereum' => 'ethereum',
         'polygon' => 'polygon-ecosystem-token',
         'bnb' => 'binancecoin',
+        'avalanche' => 'avalanche-2',
+        'arbitrum' => 'ethereum',
         'solana' => 'solana',
         'bitcoin' => 'bitcoin',
     ];
@@ -36,6 +43,8 @@ class PriceService
         'ethereum' => 'ethereum',
         'polygon' => 'polygon-pos',
         'bnb' => 'binance-smart-chain',
+        'avalanche' => 'avalanche',
+        'arbitrum' => 'arbitrum-one',
         'solana' => 'solana',
     ];
 
@@ -62,7 +71,7 @@ class PriceService
     {
         return Cache::remember('coin_prices_usd', now()->addSeconds(60), function () {
             $networks = BlockchainResolver::supportedNetworks();
-            $coinIds = array_map(fn (string $network) => self::COINGECKO_COIN_IDS[$network] ?? $network, $networks);
+            $coinIds = array_unique(array_map(fn (string $network) => self::COINGECKO_COIN_IDS[$network] ?? $network, $networks));
 
             $response = $this->http(5)->get(config('market.coingecko.base_url') . '/coins/markets', [
                 'vs_currency' => 'usd',
@@ -75,14 +84,25 @@ class PriceService
                 abort(502, 'Erro ao consultar cotações');
             }
 
-            $coins = $response->json();
+            // Indexado por coin id em vez de percorrer a resposta e usar
+            // array_search (que so acha o PRIMEIRO network que bate com
+            // aquele id) - necessario porque mais de uma rede pode
+            // compartilhar o mesmo coin id (ex: Arbitrum e Ethereum, ambas
+            // "ethereum" - ver COINGECKO_COIN_IDS).
+            $coinsById = [];
+            foreach ($response->json() as $coin) {
+                if (isset($coin['id'])) {
+                    $coinsById[$coin['id']] = $coin;
+                }
+            }
+
             $prices = [];
 
-            foreach ($coins as $coin) {
-                $coinId = $coin['id'] ?? null;
-                $network = array_search($coinId, self::COINGECKO_COIN_IDS, true);
+            foreach ($networks as $network) {
+                $coinId = self::COINGECKO_COIN_IDS[$network] ?? $network;
+                $coin = $coinsById[$coinId] ?? null;
 
-                if ($network === false) {
+                if ($coin === null) {
                     continue;
                 }
 

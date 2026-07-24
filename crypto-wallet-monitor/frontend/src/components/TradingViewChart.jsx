@@ -4,6 +4,8 @@ const SYMBOLS = {
   ethereum: "BINANCE:ETHUSDT",
   polygon: "BINANCE:POLUSDT",
   bnb: "BINANCE:BNBUSDT",
+  avalanche: "BINANCE:AVAXUSDT",
+  arbitrum: "BINANCE:ETHUSDT",
   bitcoin: "BINANCE:BTCUSDT",
   solana: "BINANCE:SOLUSDT",
 };

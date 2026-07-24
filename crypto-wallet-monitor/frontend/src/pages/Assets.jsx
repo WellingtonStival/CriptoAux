@@ -28,6 +28,8 @@ const NETWORK_FILTERS = [
   { value: "ethereum", label: "Ethereum" },
   { value: "polygon", label: "Polygon" },
   { value: "bnb", label: "BNB Chain" },
+  { value: "avalanche", label: "Avalanche" },
+  { value: "arbitrum", label: "Arbitrum" },
   { value: "solana", label: "Solana" },
 ];
 

@@ -96,8 +96,9 @@ crypto-wallet-monitor/
 │   ├── app/Services/Blockchain/ BlockchainServiceInterface, TransactionHistoryProvider,
 │   │                             AbstractEvmChainService (logica EVM
 │   │                             compartilhada), EthereumService,
-│   │                             PolygonService, BnbService, SolanaService,
-│   │                             BitcoinService, BlockchainResolver
+│   │                             PolygonService, BnbService, AvalancheService,
+│   │                             ArbitrumService, SolanaService, BitcoinService,
+│   │                             BlockchainResolver
 │   ├── app/Services/Market/     PriceService (cotações via CoinGecko)
 │   ├── app/Services/Wallet/     BalanceHistoryRecorder (salva snapshot)
 │   ├── app/Console/Commands/    CaptureWalletBalances (agendado de hora em hora)
@@ -143,7 +144,7 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
 
 ## Estado atual (verificado, não assumido)
 
-### Backend — funcional e testado ponta a ponta (216 testes, `php artisan test`)
+### Backend — funcional e testado ponta a ponta (227 testes, `php artisan test`)
 - **Suporte a tokens/ativos (2026-07-23)**: além do saldo nativo, o
   sistema agora rastreia tokens dentro de uma wallet (ERC-20 no
   Ethereum, SPL na Solana — Bitcoin não suporta). Duas tabelas novas:
@@ -400,6 +401,75 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   bem maior que no Ethereum (gas mais barato viabiliza mais spam), mas
   o filtro anti-spam (`SPAM_BALANCE_THRESHOLD`) e a descoberta via
   Alchemy funcionaram sem erro nas duas.
+- **Avalanche (2026-07-23)**: quarta rede EVM, mesmo padrão de
+  `AbstractEvmChainService` (`AvalancheService`, RPC pública
+  `api.avax.network/ext/bc/C/rpc`, Alchemy base URL
+  `avax-mainnet.g.alchemy.com/v2`) — nenhuma lógica nova, só as mesmas
+  entradas em `config/blockchain.php`/`config/alchemy.php` e o mapa da
+  `PriceService` (coin id `avalanche-2`, platform id `avalanche` —
+  também não batem com a chave de rede interna, mesmo padrão de
+  Polygon/BNB). `ApprovalScanService` (scanner de segurança) também
+  ganhou o chain_id da GoPlus pra Avalanche (`43114`), já que é EVM.
+  **Motivação real, não hipotética**: um amigo do Wellington
+  (Ronivon) cadastrou uma wallet Ethereum e relatou que tinha ETH
+  "no Aave" que não aparecia no sistema. Investigação ao vivo (Etherscan
+  + DeBank, portfólio multichain do mesmo endereço) mostrou que: (1) a
+  descoberta de token do Ethereum já estava 100% correta — os tokens
+  encontrados batiam exatamente com o Etherscan; (2) a posição "estilo
+  Aave" dele na verdade não era Aave nem Ethereum — era **BENQI**
+  (protocolo de empréstimo da Avalanche, conceito idêntico ao Aave,
+  daí a confusão de nome) na rede **Avalanche**, que o sistema
+  simplesmente não suportava ainda. Ou seja: não era bug nem exigia
+  integração especial de "DeFi" — era só uma rede faltando. ✅
+  **Testado ao vivo em 2026-07-23** com o endereço real do Ronivon:
+  saldo nativo bateu exatamente com o DeBank (2.3524779 AVAX ≈
+  $14.73), e "Buscar tokens" descobriu `sAVAX` (staking líquido, com
+  preço), `QI` (token de governança do BENQI) e `qisAVAX` (token de
+  posição do BENQI) automaticamente — a mesma descoberta genérica de
+  ERC-20 via Alchemy já usada pras outras redes, sem nenhum código
+  específico pra "detectar posição DeFi". Confirma que esse tipo de
+  posição (Aave, BENQI, Compound, etc.) já é coberto pelo sistema
+  assim que a rede onde ela vive é suportada, contanto que o protocolo
+  use tokens-recibo ERC-20 padrão (verdade pra Aave/BENQI/Compound;
+  não seria o caso de protocolos com posição não-tokenizada).
+- **Arbitrum (2026-07-23)**: quinta rede EVM, mesmo dia da Avalanche —
+  **correção da investigação anterior**, não uma escolha de roadmap. A
+  posição do Ronivon que parecia estar "faltando" era Aave V3 de
+  verdade, só que numa rede diferente da que eu tinha concluído
+  (Avalanche): confirmado direto no Arbiscan (histórico completo de
+  `Supply`/`Borrow`/`Repay`/`Withdraw` no "Aave: Pool V3") depois que o
+  Wellington mandou um print do MetaMask mostrando a posição Aave V3
+  (~US$344, WETH + 1 ativo) que meu primeiro agregador (DeBank) não
+  tinha capturado direito. ⚠️ **Lição**: um agregador multichain de
+  terceiros pode ficar incompleto silenciosamente — o explorador oficial
+  da rede específica (Arbiscan, no caso) é mais confiável que confiar
+  cegamente num serviço agregador só porque devolveu uma resposta.
+  **Detalhe técnico que não existia nas redes anteriores**: Arbitrum
+  não tem moeda nativa própria — o gas é pago em ETH, o mesmo ativo da
+  Ethereum mainnet (ARB é só o token de governança, não a moeda nativa).
+  Isso quebrava duas suposições do código:
+  1. `AbstractEvmChainService::cacheKey()` montava a chave a partir do
+     **símbolo** (`eth_balance:...`), não da rede — com `ArbitrumService`
+     também retornando `'ETH'` como símbolo, o cache do saldo da
+     Ethereum mainnet e da Arbitrum colidiriam pro mesmo endereço
+     (mesmo endereço `0x...` funciona nas duas redes). Corrigido pra
+     montar a chave pela **rede** (`arbitrum_balance:...`), não mais
+     pelo símbolo — mudança de formato que invalida (não quebra, só
+     expira) qualquer cache antigo, sem risco real dado o TTL de 60s.
+  2. `PriceService::current()` usava `array_search()` pra achar qual
+     rede correspondia a um coin id da CoinGecko — funciona só quando
+     cada coin id aparece em **uma** rede. Com Arbitrum reaproveitando
+     o coin id `"ethereum"` (mesmo ativo, mesmo preço), a Arbitrum
+     nunca teria seu preço preenchido (a Ethereum mainnet "ganhava" o
+     match sempre). Reescrito pra indexar a resposta da CoinGecko por
+     coin id e depois preencher **cada rede** a partir desse índice —
+     suporta N redes apontando pro mesmo coin id, não só 1:1.
+  ✅ **Testado ao vivo em 2026-07-23** com o endereço real do Ronivon:
+  saldo nativo `0 ETH` (bate exatamente com o Arbiscan — o dinheiro
+  dele não está em ETH puro, está todo nos tokens da Aave), e "Buscar
+  tokens" descobriu **`aArbWETH`** (0.1593 → $296,53) e **`aArbARB`**
+  (536,86 → $46,16) — os mesmos números da posição Aave V3 mostrada no
+  MetaMask dele, sem nenhum código específico de "Aave" ou "DeFi".
 - **Histórico de transações (Solana e Bitcoin apenas)**: interface
   `TransactionHistoryProvider` (separada de `BlockchainServiceInterface`,
   só `SolanaService` e `BitcoinService` implementam — Ethereum ainda não,
@@ -474,6 +544,29 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   requisições aos feeds da quantidade de usuários do sistema — ponto
   chave pra "escalável". Cada item já traz `summary` (resumo/descrição
   do RSS, sem tags HTML).
+  ⚠️ **Débito técnico pego e corrigido em 2026-07-24**: o mapa de
+  palavras-chave (`NewsService::KEYWORDS`) só cobria Bitcoin/Ethereum/
+  Solana desde a criação da funcionalidade — nunca foi atualizado
+  quando Polygon/BNB (Fase 2.9) nem Avalanche/Arbitrum (Fase 3.7/3.8)
+  foram adicionados como redes suportadas, então filtrar notícias por
+  essas redes sempre devolvia lista vazia, mesmo a rota aceitando o
+  parâmetro (`NewsController` já validava contra
+  `BlockchainResolver::supportedNetworks()` dinamicamente — só o
+  `NewsService` estava desatualizado). Adicionado `polygon`
+  (`matic`/`polygon`), `bnb` (`bnb`/`bnb chain`/`binance smart chain`),
+  `avalanche` (`avax`/`avalanche`) e `arbitrum` (só `arbitrum` — a
+  abreviação "arb" sozinha foi propositalmente deixada de fora por ser
+  ambígua demais, ex: "arbitragem"). `frontend/src/pages/News.jsx`
+  ganhou as abas correspondentes.
+  **Efeito colateral pego testando ao vivo**: o badge de moeda de cada
+  notícia mostrava o **símbolo** (`config.symbol`) da rede — como
+  Arbitrum reaproveita "ETH" (mesmo ativo nativo da Ethereum mainnet,
+  ver "Arbitrum" acima), uma notícia mencionando as duas redes exibia
+  dois badges idênticos ("ETH" "ETH"), parecendo duplicado/quebrado
+  mesmo com o dado (`currencies: ["ethereum","arbitrum"]`) correto.
+  Trocado pra mostrar `config.label` (nome da rede por extenso) nesse
+  badge especificamente — mesmo padrão já usado nos badges da tela de
+  Segurança, sem essa ambiguidade.
 - **Tradução de notícias**: `App\Services\Translation\TranslationService`
   traduz título + resumo de todas as notícias pra PT-BR **numa única
   chamada** à API da DeepL (não uma por notícia), disparada dentro do
@@ -683,6 +776,37 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   páginas renderizam corretamente dentro do novo layout, painel mobile
   abre/fecha e navega corretamente, lint limpo (sobrou só o aviso
   pré-existente do `AuthContext.jsx`, não relacionado a esta mudança).
+- **Landing page (2026-07-23)**: primeira página pública/de apresentação
+  do sistema — antes disso, `PrivateRoute` mandava qualquer visita sem
+  sessão (inclusive `/`) direto pro `/login`, sem "rosto" nenhum pro
+  produto. Em vez de mover o Dashboard pra outra URL (quebraria
+  bookmarks e o `navigate('/')` que Login/Register já usam), a rota
+  `/` virou "inteligente": `HomeRoute.jsx` (novo, em `components/`)
+  olha `useAuth().token` e decide entre `<Dashboard />` (logado) ou
+  `<Landing />` (visitante) — nenhuma outra rota mudou. `Landing.jsx`
+  (nova) é uma página própria, sem sidebar (essa é só da área logada) e
+  sem o card centralizado do `AuthLayout` (esse é só das telas de
+  auth): header com logo + botões Entrar/Criar conta, hero com proposta
+  de valor e reforço explícito de "somente leitura, nunca pedimos
+  chave privada" (mensagem de confiança relevante pro nicho), grid de
+  6 cards com as funcionalidades reais do sistema (multi-blockchain,
+  tokens, alertas Telegram, scanner de segurança, insights, comparativo
+  com Bitcoin), seção "como funciona" em 3 passos, CTA final e footer.
+  ⚠️ **Decisão consciente**: sem números/estatísticas de uso (tipo
+  "milhares de usuários") — o produto não tem essa base ainda, e
+  inventar número seria enganoso. Mesma paleta/componentes já
+  existentes (`Card`, `Button` com `asChild` pra virar `Link`, ícones
+  `lucide-react` já usados no resto do app) — sem biblioteca nova.
+  **Bug real pego testando em mobile (375px)**: o header original
+  mostrava ícone + wordmark "NEXFOLIO" por extenso + 2 botões, e não
+  cabia — o texto "Entrar" ficava sobrepondo a logo (confirmado via
+  `getBoundingClientRect()`, não só visual). Corrigido escondendo o
+  wordmark abaixo do breakpoint `sm` (mesmo padrão já usado na barra
+  mobile do `Layout.jsx`) e usando botões `size="sm"` no header.
+  Testado ao vivo: guest vê a landing em `/`, os CTAs levam pra
+  `/register`/`/login` corretamente, usuário autenticado continua
+  vendo o Dashboard normalmente em `/` sem nenhuma mudança de
+  comportamento.
 - Login e Register usam `AuthContext.login()` + `useNavigate()` (SPA, sem
   reload); logout funcional
 - Interceptor de 401 ativo — sessão expirada desloga automaticamente
@@ -879,6 +1003,28 @@ padrão. Isso já foi corrigido em `frontend/vite.config.js` com
   fila). Se o `queue` cair, saldos com cache frio continuam respondendo
   (fallback pro histórico), mas nunca mais se atualizam sozinhos — vale
   ficar de olho nisso quando for pensar em observabilidade (Fase C).
+- **Resend em modo sandbox — email de confirmação só chega pro próprio
+  Wellington (2026-07-23)**: descoberto na prática quando um amigo dele
+  (Ronivon, `roniknd@hotmail.com`, `users.id=14`) se cadastrou e nunca
+  recebeu o email de confirmação. Causa: a conta Resend do projeto
+  ainda não tem domínio verificado (`resend.com/domains`) — nesse modo
+  "teste", a API da Resend recusa envio pra qualquer destinatário que
+  não seja o dono da conta (erro fica logado em `laravel.log`:
+  "You can only send testing emails to your own email address").
+  Afeta **tanto** confirmação de cadastro quanto recuperação de senha
+  (mesma configuração `MAIL_MAILER=resend`/`MAIL_FROM_ADDRESS` pros
+  dois fluxos) — qualquer usuário real que não seja o Wellington fica
+  bloqueado sem conseguir confirmar a conta sozinho. Contornado pro
+  Ronivon manualmente (`UPDATE users SET email_verified_at = now(),
+  email_verification_token = NULL WHERE id = 14`), mas isso não escala
+  — é caso a caso. **Correção definitiva pendente, ação do Wellington**:
+  comprar um domínio (nenhum registrado ainda pro projeto) num
+  registrador (Registro.br, Cloudflare, Namecheap, etc.), verificá-lo
+  em `resend.com/domains` (adicionar os registros DNS que a Resend
+  pedir), e então atualizar `MAIL_FROM_ADDRESS` no `.env` pra um
+  endereço nesse domínio (hoje é `onboarding@resend.dev`, o remetente
+  de teste). **Bloqueia qualquer teste real com mais de um usuário** —
+  vale lembrar antes de convidar mais gente pra testar o sistema.
 
 ## Roadmap (por fases, prioridade nessa ordem)
 
@@ -1031,30 +1177,57 @@ projeto, tudo até aqui usou fornecedores com plano gratuito). Scanner
 de aprovações testado ao vivo com wallets reais do Wellington, achou 5
 aprovações de verdade (nenhuma de risco alto).
 
-**Fase 3.6 — Redesign visual v2 (sidebar de navegação)** ✅ concluída
-(etapa 1 de 3): ver detalhes na seção Frontend acima ("Navegação em
-sidebar"). Pedido do Wellington (2026-07-23) pra modernizar a aparência
-do sistema como um todo, dividido em 3 etapas por prioridade confirmada
-por ele ("Sidebar primeiro, depois landing"): (1) sidebar de navegação
-— **feito**; (2) página de apresentação/landing pro visitante não
-autenticado — **próxima**, ainda não desenhada em detalhe; (3) passe
-geral de polimento visual — adiada, escopo a definir depois de ver como
-as duas primeiras etapas ficam.
+**Fase 3.6 — Redesign visual v2 (sidebar + landing page)** ✅ concluída
+(etapas 1 e 2 de 3): ver detalhes na seção Frontend acima ("Navegação
+em sidebar" e "Landing page"). Pedido do Wellington (2026-07-23) pra
+modernizar a aparência do sistema como um todo, dividido em 3 etapas
+por prioridade confirmada por ele ("Sidebar primeiro, depois landing"):
+(1) sidebar de navegação — feito; (2) página de apresentação/landing
+pro visitante não autenticado — feito; (3) passe geral de polimento
+visual — adiada, escopo a definir depois de ver como as duas primeiras
+etapas ficam na prática.
+
+**Fase 3.7 — Avalanche** ✅ concluída: ver detalhes na seção Backend
+acima ("Avalanche"). Motivada por um caso real de suporte (amigo do
+Wellington, Ronivon, com uma posição que ele descreveu como "Aave"
+não aparecendo no sistema), não por planejamento de roadmap — achado
+ao investigar o que parecia ser uma limitação de descoberta de token,
+mas era só uma rede faltando. **Trouxe valor real** (achou uma posição
+genuína dele no BENQI, protocolo de empréstimo da Avalanche), mas
+**não era a posição "Aave" que ele procurava** — essa só foi
+localizada corretamente na fase seguinte (3.8). Confirma o princípio
+geral mesmo assim: posições em protocolos de empréstimo/staking com
+token-recibo ERC-20 (Aave, BENQI, Compound, etc.) já são cobertas
+automaticamente pela descoberta de token existente, sem precisar de
+integração especial por protocolo — só a rede onde o protocolo vive
+precisa estar suportada.
+
+**Fase 3.8 — Arbitrum** ✅ concluída: ver detalhes na seção Backend
+acima ("Arbitrum"). Correção direta da 3.7 — um print do MetaMask do
+Ronivon mostrando a posição Aave V3 de verdade (~US$344) levou a
+reinvestigar com o Arbiscan (mais confiável que o agregador multichain
+usado antes) e achar a rede certa: Arbitrum, não Avalanche. Exigiu dois
+ajustes de arquitetura que as redes anteriores não tinham forçado
+(Arbitrum não tem moeda nativa própria, usa ETH): cache de saldo
+isolado por rede em vez de por símbolo (`AbstractEvmChainService`), e
+`PriceService::current()` reescrito pra suportar N redes apontando pro
+mesmo coin id da CoinGecko. Testado ao vivo: `aArbWETH` e `aArbARB`
+descobertos automaticamente, valores batendo com o MetaMask real do
+Ronivon.
 
 **Fase 2 — Completar funcionalidades** (atual)
 Fases A, B de confiabilidade, suporte a tokens, mais blockchains EVM,
 redesign de Ativos, Insights v1, sentimento de mercado, alertas via
-Telegram, Minha Conta, comparativo/scanner de segurança e sidebar de
-navegação concluídos (2026-07-23). Próximos candidatos, combinados com
-o Wellington: página de apresentação/landing (etapa 2 do redesign
-visual, já priorizada) → feed de transações do Ethereum (via Etherscan,
-pede chave de API) → blockchains independentes (Cardano, Tron,
-Hyperliquid, Kaspa) → notificação por email como canal alternativo ao
-Telegram → assistente de IA conversacional sobre o portfólio (primeira
-integração com custo variável do projeto — precisa decidir orçamento
-antes). Perguntar ao Wellington a prioridade antes de escolher a
-próxima, exceto a landing page que já está confirmada como próximo
-passo.
+Telegram, Minha Conta, comparativo/scanner de segurança, sidebar de
+navegação, landing page, Avalanche e Arbitrum concluídos (2026-07-23).
+Próximos candidatos, combinados com o Wellington: passe geral de
+polimento visual (etapa 3 do redesign, escopo ainda em aberto) → feed
+de transações do Ethereum (via Etherscan, pede chave de API) →
+blockchains independentes (Cardano, Tron, Hyperliquid, Kaspa) →
+notificação por email como canal alternativo ao Telegram → assistente
+de IA conversacional sobre o portfólio (primeira integração com custo
+variável do projeto — precisa decidir orçamento antes). Perguntar ao
+Wellington a prioridade antes de escolher a próxima.
 
 **Fase 3 — Infra de produção** (só quando ele pedir para ir a produção)
 Docker de produção (nginx+php-fpm no backend, build estático no frontend)

@@ -64,6 +64,46 @@ class NewsServiceTest extends TestCase
         $this->assertSame(['ethereum'], $news[1]['currencies']);
     }
 
+    public function test_tags_polygon_bnb_avalanche_and_arbitrum_news(): void
+    {
+        Http::fake([
+            'coindesk.com/*' => Http::response($this->rssFeed('CoinDesk', [
+                [
+                    'title' => 'Polygon network sees rising MATIC activity',
+                    'url' => 'https://example.com/polygon',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 10:00:00 GMT',
+                ],
+                [
+                    'title' => 'BNB Chain volume grows',
+                    'url' => 'https://example.com/bnb',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 09:30:00 GMT',
+                ],
+                [
+                    'title' => 'Avalanche and AVAX gain traction',
+                    'url' => 'https://example.com/avalanche',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 09:15:00 GMT',
+                ],
+                [
+                    'title' => 'Arbitrum usage keeps climbing',
+                    'url' => 'https://example.com/arbitrum',
+                    'description' => '',
+                    'pubDate' => 'Wed, 22 Jul 2026 09:00:00 GMT',
+                ],
+            ])),
+            '*' => Http::response($this->emptyFeed()),
+        ]);
+
+        $news = app(NewsService::class)->latest();
+
+        $this->assertSame(['polygon'], $news[0]['currencies']);
+        $this->assertSame(['bnb'], $news[1]['currencies']);
+        $this->assertSame(['avalanche'], $news[2]['currencies']);
+        $this->assertSame(['arbitrum'], $news[3]['currencies']);
+    }
+
     public function test_filters_by_network(): void
     {
         Http::fake([

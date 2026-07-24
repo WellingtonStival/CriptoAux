@@ -20,5 +20,7 @@ return [
         'ethereum' => env('ALCHEMY_ETH_BASE_URL', 'https://eth-mainnet.g.alchemy.com/v2'),
         'polygon' => env('ALCHEMY_POLYGON_BASE_URL', 'https://polygon-mainnet.g.alchemy.com/v2'),
         'bnb' => env('ALCHEMY_BNB_BASE_URL', 'https://bnb-mainnet.g.alchemy.com/v2'),
+        'avalanche' => env('ALCHEMY_AVAX_BASE_URL', 'https://avax-mainnet.g.alchemy.com/v2'),
+        'arbitrum' => env('ALCHEMY_ARBITRUM_BASE_URL', 'https://arb-mainnet.g.alchemy.com/v2'),
     ],
 ];

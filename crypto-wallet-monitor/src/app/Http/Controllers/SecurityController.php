@@ -19,7 +19,7 @@ class SecurityController extends Controller
     public function approvals(Request $request, ApprovalScanService $scanner)
     {
         $wallets = $request->user()->wallets()
-            ->whereIn('network', ['ethereum', 'polygon', 'bnb'])
+            ->whereIn('network', ['ethereum', 'polygon', 'bnb', 'avalanche', 'arbitrum'])
             ->get(['id', 'name', 'address', 'network']);
 
         $approvals = collect();

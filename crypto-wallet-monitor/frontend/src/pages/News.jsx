@@ -13,6 +13,10 @@ import { Tabs, TabsList, TabsTrigger } from "../components/ui/tabs";
 const FILTERS = [
   { value: "all", label: "Todas" },
   { value: "ethereum", label: "Ethereum" },
+  { value: "polygon", label: "Polygon" },
+  { value: "bnb", label: "BNB Chain" },
+  { value: "avalanche", label: "Avalanche" },
+  { value: "arbitrum", label: "Arbitrum" },
   { value: "solana", label: "Solana" },
   { value: "bitcoin", label: "Bitcoin" },
   { value: "other", label: "Outros" },
@@ -116,7 +120,7 @@ function News() {
                           className="text-white"
                           style={{ backgroundColor: config?.color ?? "#475569" }}
                         >
-                          {config?.symbol ?? networkKey}
+                          {config?.label ?? networkKey}
                         </Badge>
                       );
                     })}
